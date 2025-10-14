@@ -1,13 +1,18 @@
-from typing import Any, Dict, Tuple
+from typing import Optional, Any, Dict, Tuple, Callable
 
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 from lightning import LightningModule
 from torchmetrics import MaxMetric, MeanMetric
+from torchmetrics.classification import MulticlassAUROC
 from torchmetrics.classification.accuracy import Accuracy
 
+from .components.mlp import TinyMLP, Standardize
 
-class MNISTLitModule(LightningModule):
-    """Example of a `LightningModule` for MNIST classification.
+
+class COLLIDE2VTinyMLPLitModule(LightningModule):
+    """Example of a `LightningModule` for COLLIDE2V classification.
 
     A `LightningModule` implements 8 key methods:
 
@@ -41,12 +46,14 @@ class MNISTLitModule(LightningModule):
 
     def __init__(
         self,
-        net: torch.nn.Module,
-        optimizer: torch.optim.Optimizer,
-        scheduler: torch.optim.lr_scheduler,
+        hidden_dim: int,
+        lr: float,
+        weight_decay: float,
+        optimizer: Callable,
+        scheduler: Optional[Callable],
         compile: bool,
     ) -> None:
-        """Initialize a `MNISTLitModule`.
+        """Initialize a `COLLIDE2VTinyMLPLitModule`.
 
         :param net: The model to train.
         :param optimizer: The optimizer to use for training.
@@ -57,16 +64,13 @@ class MNISTLitModule(LightningModule):
         # this line allows to access init params with 'self.hparams' attribute
         # also ensures init params will be stored in ckpt
         self.save_hyperparameters(logger=False)
+        
+        self.normalizer = None
 
-        self.net = net
+        self.net = None
 
         # loss function
-        self.criterion = torch.nn.CrossEntropyLoss()
-
-        # metric objects for calculating and averaging accuracy across batches
-        self.train_acc = Accuracy(task="multiclass", num_classes=10)
-        self.val_acc = Accuracy(task="multiclass", num_classes=10)
-        self.test_acc = Accuracy(task="multiclass", num_classes=10)
+        self.criterion = nn.CrossEntropyLoss()
 
         # for averaging loss across batches
         self.train_loss = MeanMetric()
@@ -75,6 +79,7 @@ class MNISTLitModule(LightningModule):
 
         # for tracking best so far validation accuracy
         self.val_acc_best = MaxMetric()
+        self.val_auroc_best = MaxMetric()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Perform a forward pass through the model `self.net`.
@@ -82,6 +87,7 @@ class MNISTLitModule(LightningModule):
         :param x: A tensor of images.
         :return: A tensor of logits.
         """
+        x = self.normalizer(x)
         return self.net(x)
 
     def on_train_start(self) -> None:
@@ -107,8 +113,11 @@ class MNISTLitModule(LightningModule):
         x, y = batch
         logits = self.forward(x)
         loss = self.criterion(logits, y)
-        preds = torch.argmax(logits, dim=1)
-        return loss, preds, y
+        
+        probs = F.softmax(logits, dim=-1)
+        preds = probs.argmax(dim=-1)
+
+        return loss, probs, preds, y
 
     def training_step(
         self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int
@@ -120,8 +129,8 @@ class MNISTLitModule(LightningModule):
         :param batch_idx: The index of the current batch.
         :return: A tensor of losses between model predictions and targets.
         """
-        loss, preds, targets = self.model_step(batch)
-
+        loss, probs, preds, targets = self.model_step(batch)
+        
         # update and log metrics
         self.train_loss(loss)
         self.train_acc(preds, targets)
@@ -142,21 +151,26 @@ class MNISTLitModule(LightningModule):
             labels.
         :param batch_idx: The index of the current batch.
         """
-        loss, preds, targets = self.model_step(batch)
+        loss, probs, preds, targets = self.model_step(batch)
 
         # update and log metrics
         self.val_loss(loss)
         self.val_acc(preds, targets)
+        self.val_auroc(probs, targets)
         self.log("val/loss", self.val_loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log("val/acc", self.val_acc, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("val/auroc", self.val_auroc, on_step=False, on_epoch=True, prog_bar=True)
 
     def on_validation_epoch_end(self) -> None:
         "Lightning hook that is called when a validation epoch ends."
         acc = self.val_acc.compute()  # get current val acc
         self.val_acc_best(acc)  # update best so far val acc
+        auroc = self.val_auroc.compute()
+        self.val_auroc_best(auroc)  # update best so far val auroc
         # log `val_acc_best` as a value through `.compute()` method, instead of as a metric object
         # otherwise metric would be reset by lightning after each epoch
         self.log("val/acc_best", self.val_acc_best.compute(), sync_dist=True, prog_bar=True)
+        self.log("val/auroc_best", self.val_auroc_best.compute(), sync_dist=True, prog_bar=True)
 
     def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> None:
         """Perform a single test step on a batch of data from the test set.
@@ -165,7 +179,7 @@ class MNISTLitModule(LightningModule):
             labels.
         :param batch_idx: The index of the current batch.
         """
-        loss, preds, targets = self.model_step(batch)
+        loss, probs, preds, targets = self.model_step(batch)
 
         # update and log metrics
         self.test_loss(loss)
@@ -186,8 +200,31 @@ class MNISTLitModule(LightningModule):
 
         :param stage: Either `"fit"`, `"validate"`, `"test"`, or `"predict"`.
         """
+        
+
+        if self.trainer and getattr(self.trainer, "datamodule", None):
+            dm = self.trainer.datamodule
+            
+            vlen = getattr(dm, "vlen", None)
+            num_classes = getattr(dm, "num_classes", None)
+            mean = getattr(dm, "feature_mean", None)
+            std = getattr(dm, "feature_std", None)
+            
+            mean = torch.as_tensor(mean, dtype=torch.float32, device=self.device) if mean is not None else None
+            std  = torch.as_tensor(std,  dtype=torch.float32, device=self.device) if std  is not None else None
+            self.normalizer = Standardize(mean, std)
+            
+            # metric objects for calculating and averaging accuracy across batches
+            self.train_acc = Accuracy(task="multiclass", num_classes=num_classes)
+            self.val_acc = Accuracy(task="multiclass", num_classes=num_classes)
+            self.val_auroc = MulticlassAUROC(num_classes=num_classes)
+            self.test_acc = Accuracy(task="multiclass", num_classes=num_classes)
+            
+            self.net = TinyMLP(in_dim=vlen, hidden_dim=self.hparams.hidden_dim, out_dim=num_classes)
+            
         if self.hparams.compile and stage == "fit":
-            self.net = torch.compile(self.net)
+            self.net = torch.compile(self.net) 
+            
 
     def configure_optimizers(self) -> Dict[str, Any]:
         """Choose what optimizers and learning-rate schedulers to use in your optimization.
@@ -198,7 +235,7 @@ class MNISTLitModule(LightningModule):
 
         :return: A dict containing the configured optimizers and learning-rate schedulers to be used for training.
         """
-        optimizer = self.hparams.optimizer(params=self.trainer.model.parameters())
+        optimizer = self.hparams.optimizer(params=self.parameters())
         if self.hparams.scheduler is not None:
             scheduler = self.hparams.scheduler(optimizer=optimizer)
             return {
@@ -214,4 +251,4 @@ class MNISTLitModule(LightningModule):
 
 
 if __name__ == "__main__":
-    _ = MNISTLitModule(None, None, None, None)
+    _ = COLLIDE2VTinyMLPLitModule(None, None, None, None)

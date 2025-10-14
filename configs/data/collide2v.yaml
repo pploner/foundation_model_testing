@@ -1,0 +1,225 @@
+_target_: src.data.collide2v_datamodule.COLLIDE2VDataModule
+batch_size: 1024 # Needs to be divisible by the number of devices (e.g., if in a distributed setup)
+train_val_test_split_per_class: [500_000, 10_000, 10_000]
+num_workers: 0
+pin_memory: False
+
+label: "QCD_ggHbb"  # label to be used for folder name of vectorized and preprocessed data
+
+paths:
+  afs_vec_dir: ${paths.afs_data_dir}/${data.label}/vectorized/
+  afs_preproc_dir: ${paths.afs_data_dir}/${data.label}/preprocessed/
+  eos_vec_dir: ${paths.eos_data_dir}/${data.label}/vectorized/
+  eos_preproc_dir: ${paths.eos_data_dir}/${data.label}/preprocessed/  
+  dataset_dir: ${paths.dataset_dir}
+
+# SPECIFY HERE WHICH COLUMNS OF THE DATASET TO TAKE FOR THE TRAINING
+# The columns are given in groups (e.g. particles, jets etc.)
+# cols: are the specific columns to be read
+# topk: are the amount of objects to be taken from the columns, they are sorted in descending order w.r.t. the first col
+# e.g. "particles": {
+#       "cols": [
+#           "FullReco_PUPPIPart_PT",
+#           "FullReco_PUPPIPart_Eta",
+#           "FullReco_PUPPIPart_Phi",
+#       ]
+#       "topk": 20,
+# takes the 20 particles with the highest PT (first col) and sorts them from highest to lowest
+# topk = 1 means only the highest object w.r.t the first column is taken
+# topk = None is used for scalar values where no ordering/selecting needs to be done (e.g. MET)
+# count: is a bool that specifies if an additional column should be made with the total number of objects (e.g. # of particles)
+
+datasets_config:
+  particles:
+    cols:
+      - FullReco_PUPPIPart_PT
+      - FullReco_PUPPIPart_Eta
+      - FullReco_PUPPIPart_Phi
+      - FullReco_PUPPIPart_Charge
+      - FullReco_PUPPIPart_Mass
+      - FullReco_PUPPIPart_PID
+      - FullReco_PUPPIPart_PuppiW
+    topk: 20
+    count: true
+
+  jets:
+    cols:
+      - FullReco_JetAK4_PT
+      - FullReco_JetAK4_Eta
+      - FullReco_JetAK4_Phi
+      - FullReco_JetAK4_Mass
+      - FullReco_JetAK4_BTag
+      - FullReco_JetAK4_Charge
+    topk: 4
+    count: true
+
+  electrons:
+    cols:
+      - FullReco_Electron_PT
+      - FullReco_Electron_Eta
+      - FullReco_Electron_Phi
+      - FullReco_Electron_EhadOverEem
+      - FullReco_Electron_IsolationVarRhoCorr
+    topk: 1
+    count: false
+
+  muons:
+    cols:
+      - FullReco_MuonTight_PT
+      - FullReco_MuonTight_Eta
+      - FullReco_MuonTight_Phi
+      - FullReco_MuonTight_IsolationVarRhoCorr
+    topk: 1
+    count: false
+
+  photons:
+    cols:
+      - FullReco_PhotonTight_PT
+      - FullReco_PhotonTight_Eta
+      - FullReco_PhotonTight_Phi
+    topk: 1
+    count: false
+
+  primary_vertex:
+    cols:
+      - FullReco_PrimaryVertex_SumPT2
+      - FullReco_PrimaryVertex_Z
+    topk: 1
+    count: false
+
+  met:
+    cols:
+      - FullReco_PUPPIMET_MET
+      - FullReco_PUPPIMET_Phi
+      - FullReco_MET_MET
+      - FullReco_MET_Phi
+    topk: null   # scalar values
+    count: false
+
+# SPECIFY HERE WHICH PROCESSES TO USE FOR THE CLASSIFIER TRAINING
+# The keys are labels used in the training
+# The values are the exact process names as in the list below
+
+# These are the possible processes:
+
+# "DY to ll"
+# "Z to vv + jet"
+# "Z to qq (uds)"
+# "Z to bb"
+# "Z to cc"
+# "W to lv"
+# "W to qq"
+# "gamma"
+# "gamma + V"
+# "tri-gamma"
+#    
+# "QCD inclusive"
+# "QCD bb"
+# "Minbias / Soft QCD"
+#    
+# "tt all-hadr"
+# "tt semi-lept"
+# "tt all-lept"
+# "ttH incl"
+# "tttt"
+# "ttW incl"
+# "ttZ incl"
+#    
+# "WW all-leptonic"
+# "WW all-hadronic"
+# "WW semi-leptonic"
+# "WZ all-leptonic"
+# "WZ all-hadronic"
+# "WZ semi-leptonic"
+# "ZZ all-leptonic"
+# "ZZ all-hadronic"
+# "ZZ semi-leptonic"
+# "VVV"
+# "VH incl"
+#    
+# "ggHbb"
+# "ggHcc"
+# "ggHgammagamma"
+# "ggHgluglu"
+# "ggHtautau"
+# "ggHWW"
+# "ggHZZ"
+# "VBFHbb"
+# "VBFHcc"
+# "VBFHgammagamma"
+# "VBFHgluglu"
+# "VBFHtautau"
+# "VBFHWW"
+# "VBFHZZ"
+#    
+# "HH 4b"
+# "HH bbtautau"
+# "HH bbWW"
+# "HH bbZZ"
+# "HH bbgammagamma"
+
+
+to_classify:
+  QCD: "QCD inclusive"
+  ggHbb: "ggHbb"
+
+
+# The mappings from processes to respective COLLIDE2V folders:
+process_to_folder:
+  "DY to ll": "DYJetsToLL_13TeV-madgraphMLM-pythia8"
+  "Z to vv + jet": "ZJetsTovv_13TeV-madgraphMLM-pythia8"
+  "Z to qq (uds)": "ZJetsToQQ_13TeV-madgraphMLM-pythia8"
+  "Z to bb": "ZJetsTobb_13TeV-madgraphMLM-pythia8"
+  "Z to cc": "ZJetsTocc_13TeV-madgraphMLM-pythia8"
+  "W to lv": "WJetsToLNu_13TeV-madgraphMLM-pythia8"
+  "W to qq": "WJetsToQQ_13TeV-madgraphMLM-pythia8"
+  "gamma": "gamma"
+  "gamma + V": "gamma_V"
+  "tri-gamma": "tri_gamma"
+  # QCD
+  "QCD inclusive": "QCD_HT50toInf"
+  "QCD bb": "QCD_HT50tobb"
+  "Minbias / Soft QCD": "minbias"
+  # top
+  "tt all-hadr": "tt0123j_5f_ckm_LO_MLM_hadronic"
+  "tt semi-lept": "tt0123j_5f_ckm_LO_MLM_semiLeptonic"
+  "tt all-lept": "tt0123j_5f_ckm_LO_MLM_leptonic"
+  "ttH incl": "ttH_incl"
+  "tttt": "tttt_incl"
+  "ttW incl": "ttW_incl"
+  "ttZ incl": "ttZ_incl"
+  # dibosons
+  "WW all-leptonic": "WW_leptonic"
+  "WW all-hadronic": "WW_hadronic"
+  "WW semi-leptonic": "WW_semileptonic"
+  "WZ all-leptonic": "WZ_leptonic"
+  "WZ all-hadronic": "WZ_hadronic"
+  "WZ semi-leptonic": "WZ_semileptonic"
+  "ZZ all-leptonic": "ZZ_leptonic"
+  "ZZ all-hadronic": "ZZ_hadronic"
+  "ZZ semi-leptonic": "ZZ_semileptonic"
+  "VVV": "VVV_incl"
+  "VH incl": "VH_incl"
+  # single-Higgs
+  "ggHbb": "ggHbb"
+  "ggHcc": "ggHcc"
+  "ggHgammagamma": "ggHgammagamma"
+  "ggHgluglu": "ggHgluglu"
+  "ggHtautau": "ggHtautau"
+  "ggHWW": "ggHWW"
+  "ggHZZ": "ggHZZ"
+  "VBFHbb": "VBFHbb"
+  "VBFHcc": "VBFHcc"
+  "VBFHgammagamma": "VBFHgammagamma"
+  "VBFHgluglu": "VBFHgluglu"
+  "VBFHtautau": "VBFHtautau"
+  "VBFHWW": "VBFHWW"
+  "VBFHZZ": "VBFHZZ"
+  # di-HiggS
+  "HH 4b": "HH_4b"
+  "HH bbtautau": "HH_bbtautau"
+  "HH bbWW": "HH_bbWW"
+  "HH bbZZ": "HH_bbZZ"
+  "HH bbgammagamma": "HH_bbgammagamma"
+
+seed: 42

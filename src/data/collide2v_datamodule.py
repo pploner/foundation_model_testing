@@ -2,20 +2,22 @@ from typing import Any, Dict, Optional, Tuple
 
 import torch
 from lightning import LightningDataModule
-from torch.utils.data import ConcatDataset, DataLoader, Dataset, random_split
+from torch.utils.data import ConcatDataset, DataLoader, Dataset, IterableDataset, random_split
 from torchvision.datasets import MNIST
 from torchvision.transforms import transforms
 
+import os, random, numpy as np
 
-class MNISTDataModule(LightningDataModule):
-    """`LightningDataModule` for the MNIST dataset.
+from src.data.utils import get_all_cols, compute_vlen, vectorized_to_local, worker_init_fn, has_enough_events, estimate_mean_std
 
-    The MNIST database of handwritten digits has a training set of 60,000 examples, and a test set of 10,000 examples.
-    It is a subset of a larger set available from NIST. The digits have been size-normalized and centered in a
-    fixed-size image. The original black and white images from NIST were size normalized to fit in a 20x20 pixel box
-    while preserving their aspect ratio. The resulting images contain grey levels as a result of the anti-aliasing
-    technique used by the normalization algorithm. the images were centered in a 28x28 image by computing the center of
-    mass of the pixels, and translating the image so as to position this point at the center of the 28x28 field.
+from src.data.datasets import LocalVectorDataset, ShuffleBuffer     
+
+class COLLIDE2VDataModule(LightningDataModule):
+    """`LightningDataModule` for the COLLIDE2V dataset.
+
+    The COLLIDE2V dataset is a dataset for training and evaluating particle collision models, simulated by a Madgraph Pythia Delphes chain.
+    It is stored in columnar format in Parquet files, where the rows correspond to collision events and the columns represent the physics features of the particles involved in the collisions.
+    The dataset is organized in folders based on the process type and stored in shards of 10'000 simulated events each.
 
     A `LightningDataModule` implements 7 key methods:
 
@@ -54,34 +56,46 @@ class MNISTDataModule(LightningDataModule):
 
     def __init__(
         self,
-        data_dir: str = "data/",
-        train_val_test_split: Tuple[int, int, int] = (55_000, 5_000, 10_000),
-        batch_size: int = 64,
+        batch_size: int = 1024,
+        train_val_test_split_per_class: Tuple[int, int, int] = (500_000, 10_000, 10_000),
         num_workers: int = 0,
         pin_memory: bool = False,
-    ) -> None:
-        """Initialize a `MNISTDataModule`.
-
-        :param data_dir: The data directory. Defaults to `"data/"`.
-        :param train_val_test_split: The train, validation and test split. Defaults to `(55_000, 5_000, 10_000)`.
-        :param batch_size: The batch size. Defaults to `64`.
-        :param num_workers: The number of workers. Defaults to `0`.
-        :param pin_memory: Whether to pin memory. Defaults to `False`.
+        label: str = "test",
+        paths: Optional[Dict[str, str]] = None,
+        datasets_config: Optional[Dict[str, Any]] = None,
+        to_classify: Optional[Dict[str, str]] = None,
+        process_to_folder: Optional[Dict[str, str]] = None,
+        seed: int = 42,
+    ):
+        """Initialize a `COLLIDE2VDataModule`.
         """
         super().__init__()
 
         # this line allows to access init params with 'self.hparams' attribute
         # also ensures init params will be stored in ckpt
         self.save_hyperparameters(logger=False)
+        
+        self.train_val_test_split_per_class = train_val_test_split_per_class
+        self.num_workers = num_workers
+        self.pin_memory = pin_memory
+        self.label = label
+        self.paths = paths or {}
+        self.datasets_config = datasets_config or {}
+        self.to_classify = to_classify or {}
+        self.process_to_folder = process_to_folder or {}
+        
+        self.vlen = compute_vlen(self.datasets_config)
 
-        # data transformations
-        self.transforms = transforms.Compose(
-            [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
-        )
+        self.classnames = list(self.to_classify.keys())
+        self.pretty = {c: self.to_classify[c] for c in self.classnames}
+        self.folder = {c: self.process_to_folder[self.pretty[c]] for c in self.classnames}
+        self.labels = {c: i for i, c in enumerate(self.classnames)}
 
         self.data_train: Optional[Dataset] = None
         self.data_val: Optional[Dataset] = None
         self.data_test: Optional[Dataset] = None
+        
+        self.seed = seed
 
         self.batch_size_per_device = batch_size
 
@@ -89,9 +103,9 @@ class MNISTDataModule(LightningDataModule):
     def num_classes(self) -> int:
         """Get the number of classes.
 
-        :return: The number of MNIST classes (10).
+        :return: The number of classes .
         """
-        return 10
+        return len(self.classnames)
 
     def prepare_data(self) -> None:
         """Download data if needed. Lightning ensures that `self.prepare_data()` is called only
@@ -101,8 +115,30 @@ class MNISTDataModule(LightningDataModule):
 
         Do not use it to assign state (self.x = y).
         """
-        MNIST(self.hparams.data_dir, train=True, download=True)
-        MNIST(self.hparams.data_dir, train=False, download=True)
+        
+        print(f"🟡 Generating vectorized data in {self.paths['eos_vec_dir']}")
+        vectorized_to_local(
+            base_dir=self.paths["dataset_dir"],
+            config=self.datasets_config,
+            class_names=self.classnames,
+            folder_map=self.folder,
+            labels_map=self.labels,
+            all_cols=get_all_cols(self.datasets_config),
+            vlen=self.vlen,
+            afs_vec_dir=self.paths["afs_vec_dir"],
+            eos_vec_dir=self.paths["eos_vec_dir"],
+            split_counts=self.train_val_test_split_per_class,
+            read_batch_size=512, 
+        )
+
+        mean, std = estimate_mean_std(os.path.join(self.paths["eos_vec_dir"], "train"), 30000)
+        self.feature_mean = mean
+        self.feature_std = std
+
+        print(f"🟡 For first 10 features, estimated mean: {self.feature_mean[:10]}"
+              f" and std: {self.feature_std[:10]}")
+
+        # INCLUDE HERE PREPROCESSING STEPS AND PLOTTING IF NEEDED
 
     def setup(self, stage: Optional[str] = None) -> None:
         """Load data. Set variables: `self.data_train`, `self.data_val`, `self.data_test`.
@@ -122,55 +158,42 @@ class MNISTDataModule(LightningDataModule):
                 )
             self.batch_size_per_device = self.hparams.batch_size // self.trainer.world_size
 
-        # load and split datasets only if not loaded already
-        if not self.data_train and not self.data_val and not self.data_test:
-            trainset = MNIST(self.hparams.data_dir, train=True, transform=self.transforms)
-            testset = MNIST(self.hparams.data_dir, train=False, transform=self.transforms)
-            dataset = ConcatDataset(datasets=[trainset, testset])
-            self.data_train, self.data_val, self.data_test = random_split(
-                dataset=dataset,
-                lengths=self.hparams.train_val_test_split,
-                generator=torch.Generator().manual_seed(42),
-            )
+        if has_enough_events(self.paths["eos_preproc_dir"]):
+            print(f"🟡 Preprocessed data found — using from {self.paths['eos_preproc_dir']}")
+            self.trainstream = LocalVectorDataset(os.path.join(self.paths["eos_preproc_dir"], "train"))
+            self.valstream = LocalVectorDataset(os.path.join(self.paths["eos_preproc_dir"], "val"))
+            self.teststream = LocalVectorDataset(os.path.join(self.paths["eos_preproc_dir"], "test"))
+        else:
+            print(f"🟡 Preprocessed data not found — using vectorized data from {self.paths['eos_vec_dir']}")
+            self.trainstream = LocalVectorDataset(os.path.join(self.paths["eos_vec_dir"], "train"))
+            self.valstream = LocalVectorDataset(os.path.join(self.paths["eos_vec_dir"], "val"))
+            self.teststream = LocalVectorDataset(os.path.join(self.paths["eos_vec_dir"], "test"))
+
+        self.shuffled_train = ShuffleBuffer(self.trainstream, buffer_size=10000)
 
     def train_dataloader(self) -> DataLoader[Any]:
         """Create and return the train dataloader.
 
         :return: The train dataloader.
         """
-        return DataLoader(
-            dataset=self.data_train,
-            batch_size=self.batch_size_per_device,
-            num_workers=self.hparams.num_workers,
-            pin_memory=self.hparams.pin_memory,
-            shuffle=True,
-        )
+        return DataLoader(dataset=self.shuffled_train, batch_size=None, num_workers=self.num_workers, 
+                          pin_memory=self.pin_memory, worker_init_fn=worker_init_fn)
 
     def val_dataloader(self) -> DataLoader[Any]:
         """Create and return the validation dataloader.
 
         :return: The validation dataloader.
         """
-        return DataLoader(
-            dataset=self.data_val,
-            batch_size=self.batch_size_per_device,
-            num_workers=self.hparams.num_workers,
-            pin_memory=self.hparams.pin_memory,
-            shuffle=False,
-        )
+        return DataLoader(dataset=self.valstream, batch_size=None, num_workers=self.num_workers, 
+                          pin_memory=self.pin_memory, worker_init_fn=worker_init_fn)
 
     def test_dataloader(self) -> DataLoader[Any]:
         """Create and return the test dataloader.
 
         :return: The test dataloader.
         """
-        return DataLoader(
-            dataset=self.data_test,
-            batch_size=self.batch_size_per_device,
-            num_workers=self.hparams.num_workers,
-            pin_memory=self.hparams.pin_memory,
-            shuffle=False,
-        )
+        return DataLoader(dataset=self.teststream, batch_size=None, num_workers=self.num_workers, 
+                          pin_memory=self.pin_memory, worker_init_fn=worker_init_fn)
 
     def teardown(self, stage: Optional[str] = None) -> None:
         """Lightning hook for cleaning up after `trainer.fit()`, `trainer.validate()`,
@@ -198,4 +221,4 @@ class MNISTDataModule(LightningDataModule):
 
 
 if __name__ == "__main__":
-    _ = MNISTDataModule()
+    _ = COLLIDE2VDataModule()

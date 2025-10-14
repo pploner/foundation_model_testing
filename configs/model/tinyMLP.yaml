@@ -1,0 +1,17 @@
+_target_: src.models.collide2v_tinymlp.COLLIDE2VTinyMLPLitModule
+
+hidden_dim: 256
+lr: 1e-3
+weight_decay: 1e-2
+compile: false
+
+optimizer:
+  _target_: torch.optim.AdamW
+  _partial_: true
+  lr: 1e-3
+  weight_decay: 1e-2
+
+scheduler:
+  _target_: torch.optim.lr_scheduler.CosineAnnealingLR
+  _partial_: true
+  T_max: ${trainer.max_epochs}
