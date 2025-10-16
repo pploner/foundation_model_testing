@@ -38,9 +38,10 @@ jobs:
         run: |
           python -m pip list
 
-      - name: Run pytest
-        run: |
-          pytest -v
+    # NOT RUNNING PYTEST BECAUSE /EOS IS NOT ACCESSIBLE ON GITHUB ACTIONS
+    #  - name: Run pytest
+    #    run: |
+    #      pytest -v
 
   run_tests_macos:
     runs-on: ${{ matrix.os }}
