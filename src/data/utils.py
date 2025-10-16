@@ -13,7 +13,7 @@ from omegaconf import OmegaConf
 from .datasets import LocalVectorDataset
 
 # ============================================================
-# 🔧 CONFIG DERIVED UTILITIES
+# CONFIG DERIVED UTILITIES
 # ============================================================
 
 def get_all_cols(config: dict):
@@ -40,7 +40,7 @@ def compute_vlen(config: dict) -> int:
 
 
 # ============================================================
-# 🧩 FEATURE PACKING HELPERS
+# FEATURE PACKING HELPERS
 # ============================================================
 
 def _pack_topk_batch(pt, *others, k: int, fill: float):
@@ -89,7 +89,7 @@ def _pack_leading_batch(pt, *others, fill: float):
 
 
 # ============================================================
-# 🧠 BATCH VECTOR CONSTRUCTION
+# BATCH VECTOR CONSTRUCTION
 # ============================================================
 
 def build_vectors_batch(batch: dict, config: dict, fill: float = 0.0) -> np.ndarray:
@@ -131,7 +131,7 @@ def build_vectors_batch(batch: dict, config: dict, fill: float = 0.0) -> np.ndar
 
 
 # ============================================================
-# 🧾 FEATURE MAP SAVING
+# FEATURE MAP SAVING
 # ============================================================
 
 def save_feature_map(config, out_dir: str, vlen: int):
@@ -170,7 +170,7 @@ def save_feature_map(config, out_dir: str, vlen: int):
 
 
 # ============================================================
-# 📦 FILE + STORAGE UTILITIES
+# FILE + STORAGE UTILITIES
 # ============================================================
 
 def move_to_eos(local_dir: str, eos_dir: str):
@@ -185,7 +185,7 @@ def move_to_eos(local_dir: str, eos_dir: str):
 
 
 # ============================================================
-# 🧠 VECTORIZE AND SAVE LOCALLY
+# VECTORIZE AND SAVE LOCALLY
 # ============================================================
 
 def vectorized_to_local(
