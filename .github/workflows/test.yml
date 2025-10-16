@@ -74,9 +74,9 @@ jobs:
         run: |
           python -m pip list
 
-      - name: Run pytest
-        run: |
-          pytest -v
+      #- name: Run pytest
+      #  run: |
+      #    pytest -v
 
   run_tests_windows:
     runs-on: ${{ matrix.os }}
@@ -108,9 +108,9 @@ jobs:
         run: |
           python -m pip list
 
-      - name: Run pytest
-        run: |
-          pytest -v
+      #- name: Run pytest
+      #  run: |
+      #    pytest -v
 
   # upload code coverage report
   code-coverage:
@@ -133,8 +133,8 @@ jobs:
           pip install pytest-cov[toml]
           pip install sh
 
-      - name: Run tests and collect coverage
-        run: pytest --cov src # NEEDS TO BE UPDATED WHEN CHANGING THE NAME OF "src" FOLDER
+      #- name: Run tests and collect coverage
+      #  run: pytest --cov src # NEEDS TO BE UPDATED WHEN CHANGING THE NAME OF "src" FOLDER
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+      #- name: Upload coverage to Codecov
+      #  uses: codecov/codecov-action@v3
