@@ -1,8 +1,9 @@
-import os
 import json
-import numpy as np
-import matplotlib.pyplot as plt
+import os
 from typing import Dict, List
+
+import matplotlib.pyplot as plt
+import numpy as np
 
 
 def load_feature_map(base_dir: str) -> Dict:
@@ -10,7 +11,7 @@ def load_feature_map(base_dir: str) -> Dict:
     path = os.path.join(base_dir, "feature_map.json")
     if not os.path.exists(path):
         raise FileNotFoundError(f"feature_map.json not found in {base_dir}")
-    with open(path, "r") as f:
+    with open(path) as f:
         return json.load(f)
 
 
@@ -24,7 +25,9 @@ def load_process_samples(process_dir: str, max_files: int = 5) -> np.ndarray:
     return np.concatenate(arrays, axis=0)
 
 
-def extract_leading_objects(data: np.ndarray, start: int, end: int, topk: int, n_cols: int, include_count: bool) -> np.ndarray:
+def extract_leading_objects(
+    data: np.ndarray, start: int, end: int, topk: int, n_cols: int, include_count: bool
+) -> np.ndarray:
     """Extract only the leading object features (excluding count if present)."""
     # If count=True, remove the last entry from slice
     true_end = end - 1 if include_count else end
@@ -78,7 +81,9 @@ def plot_process_features(
         if include_count:
             count_idx = end - 1
             if count_idx >= data.shape[1]:
-                print(f"⚠️ Skipping count for {group_name}: index {count_idx} out of range for {process_name}")
+                print(
+                    f"⚠️ Skipping count for {group_name}: index {count_idx} out of range for {process_name}"
+                )
                 continue
             count_values = data[:, count_idx]
             plt.figure(figsize=(6, 4))
@@ -92,7 +97,9 @@ def plot_process_features(
             plt.close()
 
 
-def plot_all_processes(base_dir: str, output_dir: str = "plots/raw_features", split: str = "train"):
+def plot_all_processes(
+    base_dir: str, output_dir: str = "plots/raw_features", split: str = "train"
+):
     """Load all process subfolders under the specified split and plot features."""
     fmap = load_feature_map(base_dir)
     split_dir = os.path.join(base_dir, split)

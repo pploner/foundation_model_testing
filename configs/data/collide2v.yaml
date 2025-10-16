@@ -10,7 +10,7 @@ paths:
   afs_vec_dir: ${paths.afs_data_dir}/${data.label}/vectorized/
   afs_preproc_dir: ${paths.afs_data_dir}/${data.label}/preprocessed/
   eos_vec_dir: ${paths.eos_data_dir}/${data.label}/vectorized/
-  eos_preproc_dir: ${paths.eos_data_dir}/${data.label}/preprocessed/  
+  eos_preproc_dir: ${paths.eos_data_dir}/${data.label}/preprocessed/
   dataset_dir: ${paths.dataset_dir}
 
 # SPECIFY HERE WHICH COLUMNS OF THE DATASET TO TAKE FOR THE TRAINING
@@ -112,11 +112,11 @@ datasets_config:
 # "gamma"
 # "gamma + V"
 # "tri-gamma"
-#    
+#
 # "QCD inclusive"
 # "QCD bb"
 # "Minbias / Soft QCD"
-#    
+#
 # "tt all-hadr"
 # "tt semi-lept"
 # "tt all-lept"
@@ -124,7 +124,7 @@ datasets_config:
 # "tttt"
 # "ttW incl"
 # "ttZ incl"
-#    
+#
 # "WW all-leptonic"
 # "WW all-hadronic"
 # "WW semi-leptonic"
@@ -136,7 +136,7 @@ datasets_config:
 # "ZZ semi-leptonic"
 # "VVV"
 # "VH incl"
-#    
+#
 # "ggHbb"
 # "ggHcc"
 # "ggHgammagamma"
@@ -151,7 +151,7 @@ datasets_config:
 # "VBFHtautau"
 # "VBFHWW"
 # "VBFHZZ"
-#    
+#
 # "HH 4b"
 # "HH bbtautau"
 # "HH bbWW"

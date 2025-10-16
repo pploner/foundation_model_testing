@@ -1,18 +1,21 @@
-from torch.utils.data import IterableDataset
-import numpy as np
 import os
 import random
+
+import numpy as np
 import torch
+from torch.utils.data import IterableDataset
+
 
 class LocalVectorDataset(IterableDataset):
+    """Iterates over locally stored .npy vectorized files in a structure like:
+
+    base_dir/
+        QCD_HT50toInf/
+          file1_x.npy, file1_y.npy, ...
+      base_dir: str, the base directory where the class subdirectories are located
+      per_class_limit: optional int, how many samples to load per class (None for all)
     """
-    Iterates over locally stored .npy vectorized files in a structure like:
-      base_dir/
-          QCD_HT50toInf/
-            file1_x.npy, file1_y.npy, ...
-        base_dir: str, the base directory where the class subdirectories are located
-        per_class_limit: optional int, how many samples to load per class (None for all)
-    """
+
     def __init__(self, base_dir, per_class_limit=None):
         super().__init__()
         self.base_dir = base_dir
@@ -20,7 +23,7 @@ class LocalVectorDataset(IterableDataset):
 
     def __iter__(self):
         seed = torch.initial_seed() % 2**32
-        
+
         class_dirs = [
             os.path.join(self.base_dir, folder)
             for folder in os.listdir(self.base_dir)
@@ -41,7 +44,7 @@ class LocalVectorDataset(IterableDataset):
                 fy = fx.replace("_x.npy", "_y.npy")
                 X = np.load(os.path.join(class_dir, fx))
                 y = np.load(os.path.join(class_dir, fy))
-                
+
                 X = torch.from_numpy(X).float()
                 y = torch.from_numpy(y).long()
 
@@ -56,7 +59,8 @@ class LocalVectorDataset(IterableDataset):
                     counters[cname] += len(y)
 
                 yield X, y
-                
+
+
 class ShuffleBuffer(IterableDataset):
     def __init__(self, dataset, buffer_size=10000):
         """

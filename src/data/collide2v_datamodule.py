@@ -1,16 +1,30 @@
+import os
+import random
 from typing import Any, Dict, Optional, Tuple
 
+import numpy as np
 import torch
 from lightning import LightningDataModule
-from torch.utils.data import ConcatDataset, DataLoader, Dataset, IterableDataset, random_split
+from torch.utils.data import (
+    ConcatDataset,
+    DataLoader,
+    Dataset,
+    IterableDataset,
+    random_split,
+)
 from torchvision.datasets import MNIST
 from torchvision.transforms import transforms
 
-import os, random, numpy as np
+from src.data.datasets import LocalVectorDataset, ShuffleBuffer
+from src.data.utils import (
+    compute_vlen,
+    estimate_mean_std,
+    get_all_cols,
+    has_enough_events,
+    vectorized_to_local,
+    worker_init_fn,
+)
 
-from src.data.utils import get_all_cols, compute_vlen, vectorized_to_local, worker_init_fn, has_enough_events, estimate_mean_std
-
-from src.data.datasets import LocalVectorDataset, ShuffleBuffer     
 
 class COLLIDE2VDataModule(LightningDataModule):
     """`LightningDataModule` for the COLLIDE2V dataset.
@@ -67,14 +81,13 @@ class COLLIDE2VDataModule(LightningDataModule):
         process_to_folder: Optional[Dict[str, str]] = None,
         seed: int = 42,
     ):
-        """Initialize a `COLLIDE2VDataModule`.
-        """
+        """Initialize a `COLLIDE2VDataModule`."""
         super().__init__()
 
         # this line allows to access init params with 'self.hparams' attribute
         # also ensures init params will be stored in ckpt
         self.save_hyperparameters(logger=False)
-        
+
         self.train_val_test_split_per_class = train_val_test_split_per_class
         self.num_workers = num_workers
         self.pin_memory = pin_memory
@@ -83,7 +96,7 @@ class COLLIDE2VDataModule(LightningDataModule):
         self.datasets_config = datasets_config or {}
         self.to_classify = to_classify or {}
         self.process_to_folder = process_to_folder or {}
-        
+
         self.vlen = compute_vlen(self.datasets_config)
 
         self.classnames = list(self.to_classify.keys())
@@ -94,7 +107,7 @@ class COLLIDE2VDataModule(LightningDataModule):
         self.data_train: Optional[Dataset] = None
         self.data_val: Optional[Dataset] = None
         self.data_test: Optional[Dataset] = None
-        
+
         self.seed = seed
 
         self.batch_size_per_device = batch_size
@@ -115,7 +128,7 @@ class COLLIDE2VDataModule(LightningDataModule):
 
         Do not use it to assign state (self.x = y).
         """
-        
+
         print(f"🟡 Generating vectorized data in {self.paths['eos_vec_dir']}")
         vectorized_to_local(
             base_dir=self.paths["dataset_dir"],
@@ -128,15 +141,17 @@ class COLLIDE2VDataModule(LightningDataModule):
             afs_vec_dir=self.paths["afs_vec_dir"],
             eos_vec_dir=self.paths["eos_vec_dir"],
             split_counts=self.train_val_test_split_per_class,
-            read_batch_size=512, 
+            read_batch_size=512,
         )
 
         mean, std = estimate_mean_std(os.path.join(self.paths["eos_vec_dir"], "train"), 30000)
         self.feature_mean = mean
         self.feature_std = std
 
-        print(f"🟡 For first 10 features, estimated mean: {self.feature_mean[:10]}"
-              f" and std: {self.feature_std[:10]}")
+        print(
+            f"🟡 For first 10 features, estimated mean: {self.feature_mean[:10]}"
+            f" and std: {self.feature_std[:10]}"
+        )
 
         # INCLUDE HERE PREPROCESSING STEPS AND PLOTTING IF NEEDED
 
@@ -158,13 +173,24 @@ class COLLIDE2VDataModule(LightningDataModule):
                 )
             self.batch_size_per_device = self.hparams.batch_size // self.trainer.world_size
 
-        if has_enough_events(self.paths["eos_preproc_dir"]):
+        if has_enough_events(
+            self.paths["eos_preproc_dir"],
+            self.train_val_test_split_per_class,
+            self.classnames,
+            self.folder,
+        ):
             print(f"🟡 Preprocessed data found — using from {self.paths['eos_preproc_dir']}")
-            self.trainstream = LocalVectorDataset(os.path.join(self.paths["eos_preproc_dir"], "train"))
+            self.trainstream = LocalVectorDataset(
+                os.path.join(self.paths["eos_preproc_dir"], "train")
+            )
             self.valstream = LocalVectorDataset(os.path.join(self.paths["eos_preproc_dir"], "val"))
-            self.teststream = LocalVectorDataset(os.path.join(self.paths["eos_preproc_dir"], "test"))
+            self.teststream = LocalVectorDataset(
+                os.path.join(self.paths["eos_preproc_dir"], "test")
+            )
         else:
-            print(f"🟡 Preprocessed data not found — using vectorized data from {self.paths['eos_vec_dir']}")
+            print(
+                f"🟡 Preprocessed data not found — using vectorized data from {self.paths['eos_vec_dir']}"
+            )
             self.trainstream = LocalVectorDataset(os.path.join(self.paths["eos_vec_dir"], "train"))
             self.valstream = LocalVectorDataset(os.path.join(self.paths["eos_vec_dir"], "val"))
             self.teststream = LocalVectorDataset(os.path.join(self.paths["eos_vec_dir"], "test"))
@@ -176,24 +202,39 @@ class COLLIDE2VDataModule(LightningDataModule):
 
         :return: The train dataloader.
         """
-        return DataLoader(dataset=self.shuffled_train, batch_size=None, num_workers=self.num_workers, 
-                          pin_memory=self.pin_memory, worker_init_fn=worker_init_fn)
+        return DataLoader(
+            dataset=self.shuffled_train,
+            batch_size=None,
+            num_workers=self.num_workers,
+            pin_memory=self.pin_memory,
+            worker_init_fn=worker_init_fn,
+        )
 
     def val_dataloader(self) -> DataLoader[Any]:
         """Create and return the validation dataloader.
 
         :return: The validation dataloader.
         """
-        return DataLoader(dataset=self.valstream, batch_size=None, num_workers=self.num_workers, 
-                          pin_memory=self.pin_memory, worker_init_fn=worker_init_fn)
+        return DataLoader(
+            dataset=self.valstream,
+            batch_size=None,
+            num_workers=self.num_workers,
+            pin_memory=self.pin_memory,
+            worker_init_fn=worker_init_fn,
+        )
 
     def test_dataloader(self) -> DataLoader[Any]:
         """Create and return the test dataloader.
 
         :return: The test dataloader.
         """
-        return DataLoader(dataset=self.teststream, batch_size=None, num_workers=self.num_workers, 
-                          pin_memory=self.pin_memory, worker_init_fn=worker_init_fn)
+        return DataLoader(
+            dataset=self.teststream,
+            batch_size=None,
+            num_workers=self.num_workers,
+            pin_memory=self.pin_memory,
+            worker_init_fn=worker_init_fn,
+        )
 
     def teardown(self, stage: Optional[str] = None) -> None:
         """Lightning hook for cleaning up after `trainer.fit()`, `trainer.validate()`,

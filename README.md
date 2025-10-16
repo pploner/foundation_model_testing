@@ -17,7 +17,6 @@ The repository follows the lightning-hydra framework that is accessible here: <a
 
 Please send any feedback or suggestions to plonerp@ethz.ch.
 
-
 ## Installation
 
 #### Pip

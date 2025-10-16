@@ -1,4 +1,4 @@
-from typing import Optional, Any, Dict, Tuple, Callable
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -8,7 +8,7 @@ from torchmetrics import MaxMetric, MeanMetric
 from torchmetrics.classification import MulticlassAUROC
 from torchmetrics.classification.accuracy import Accuracy
 
-from .components.mlp import TinyMLP, Standardize
+from .components.mlp import Standardize, TinyMLP
 
 
 class COLLIDE2VTinyMLPLitModule(LightningModule):
@@ -64,7 +64,7 @@ class COLLIDE2VTinyMLPLitModule(LightningModule):
         # this line allows to access init params with 'self.hparams' attribute
         # also ensures init params will be stored in ckpt
         self.save_hyperparameters(logger=False)
-        
+
         self.normalizer = None
 
         self.net = None
@@ -113,7 +113,7 @@ class COLLIDE2VTinyMLPLitModule(LightningModule):
         x, y = batch
         logits = self.forward(x)
         loss = self.criterion(logits, y)
-        
+
         probs = F.softmax(logits, dim=-1)
         preds = probs.argmax(dim=-1)
 
@@ -130,7 +130,7 @@ class COLLIDE2VTinyMLPLitModule(LightningModule):
         :return: A tensor of losses between model predictions and targets.
         """
         loss, probs, preds, targets = self.model_step(batch)
-        
+
         # update and log metrics
         self.train_loss(loss)
         self.train_acc(preds, targets)
@@ -200,31 +200,39 @@ class COLLIDE2VTinyMLPLitModule(LightningModule):
 
         :param stage: Either `"fit"`, `"validate"`, `"test"`, or `"predict"`.
         """
-        
 
         if self.trainer and getattr(self.trainer, "datamodule", None):
             dm = self.trainer.datamodule
-            
+
             vlen = getattr(dm, "vlen", None)
             num_classes = getattr(dm, "num_classes", None)
             mean = getattr(dm, "feature_mean", None)
             std = getattr(dm, "feature_std", None)
-            
-            mean = torch.as_tensor(mean, dtype=torch.float32, device=self.device) if mean is not None else None
-            std  = torch.as_tensor(std,  dtype=torch.float32, device=self.device) if std  is not None else None
+
+            mean = (
+                torch.as_tensor(mean, dtype=torch.float32, device=self.device)
+                if mean is not None
+                else None
+            )
+            std = (
+                torch.as_tensor(std, dtype=torch.float32, device=self.device)
+                if std is not None
+                else None
+            )
             self.normalizer = Standardize(mean, std)
-            
+
             # metric objects for calculating and averaging accuracy across batches
             self.train_acc = Accuracy(task="multiclass", num_classes=num_classes)
             self.val_acc = Accuracy(task="multiclass", num_classes=num_classes)
             self.val_auroc = MulticlassAUROC(num_classes=num_classes)
             self.test_acc = Accuracy(task="multiclass", num_classes=num_classes)
-            
-            self.net = TinyMLP(in_dim=vlen, hidden_dim=self.hparams.hidden_dim, out_dim=num_classes)
-            
+
+            self.net = TinyMLP(
+                in_dim=vlen, hidden_dim=self.hparams.hidden_dim, out_dim=num_classes
+            )
+
         if self.hparams.compile and stage == "fit":
-            self.net = torch.compile(self.net) 
-            
+            self.net = torch.compile(self.net)
 
     def configure_optimizers(self) -> Dict[str, Any]:
         """Choose what optimizers and learning-rate schedulers to use in your optimization.

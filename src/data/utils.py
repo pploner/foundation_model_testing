@@ -1,20 +1,22 @@
-import awkward as ak
-import numpy as np
-import os
 import json
-import shutil
-import numpy as np
-import awkward as ak
-import pyarrow.parquet as pq
-import pyarrow as pa
-import torch
+import math
+import os
 import random
+import shutil
+
+import awkward as ak
+import numpy as np
+import pyarrow as pa
+import pyarrow.parquet as pq
+import torch
 from omegaconf import OmegaConf
+
 from .datasets import LocalVectorDataset
 
 # ============================================================
 # CONFIG DERIVED UTILITIES
 # ============================================================
+
 
 def get_all_cols(config: dict):
     """Return a flat list of all columns used across all dataset groups."""
@@ -43,9 +45,10 @@ def compute_vlen(config: dict) -> int:
 # FEATURE PACKING HELPERS
 # ============================================================
 
+
 def _pack_topk_batch(pt, *others, k: int, fill: float):
-    """
-    Picks top-k objects by first feature (e.g. pt).
+    """Picks top-k objects by first feature (e.g. pt).
+
     Returns: np.ndarray of shape (n_events, k, n_features)
     """
     arrays = (pt,) + others
@@ -69,8 +72,8 @@ def _pack_topk_batch(pt, *others, k: int, fill: float):
 
 
 def _pack_leading_batch(pt, *others, fill: float):
-    """
-    Picks top-1 object (highest pt).
+    """Picks top-1 object (highest pt).
+
     Returns: np.ndarray of shape (n_events, 1, n_features)
     """
     arrays = (pt,) + others
@@ -91,6 +94,7 @@ def _pack_leading_batch(pt, *others, fill: float):
 # ============================================================
 # BATCH VECTOR CONSTRUCTION
 # ============================================================
+
 
 def build_vectors_batch(batch: dict, config: dict, fill: float = 0.0) -> np.ndarray:
     """
@@ -134,11 +138,12 @@ def build_vectors_batch(batch: dict, config: dict, fill: float = 0.0) -> np.ndar
 # FEATURE MAP SAVING
 # ============================================================
 
+
 def save_feature_map(config, out_dir: str, vlen: int):
     """Save a feature_map.json describing flattened layout."""
     feature_map = {}
     offset = 0
-    
+
     config_dict = OmegaConf.to_container(config, resolve=True)
 
     for group_name, cfg in config_dict.items():
@@ -173,6 +178,7 @@ def save_feature_map(config, out_dir: str, vlen: int):
 # FILE + STORAGE UTILITIES
 # ============================================================
 
+
 def move_to_eos(local_dir: str, eos_dir: str):
     """Move a directory or file from a local tmpdir to EOS target."""
     os.makedirs(os.path.dirname(eos_dir), exist_ok=True)
@@ -188,6 +194,7 @@ def move_to_eos(local_dir: str, eos_dir: str):
 # VECTORIZE AND SAVE LOCALLY
 # ============================================================
 
+
 def vectorized_to_local(
     base_dir: str,
     config: dict,
@@ -198,12 +205,13 @@ def vectorized_to_local(
     vlen: int,
     afs_vec_dir: str,
     eos_vec_dir: str,
-    split_counts: list,     # [train, val, test]
+    split_counts: list,  # [train, val, test]
     read_batch_size: int = 512,  # this is only for how many are read from Parquet at once
 ):
-    """
-    Stream Parquet shards from EOS, vectorize each batch, and save .npy shards
-    under afs_vec_dir (train/val/test split). Then move to eos_vec_dir.
+    """Stream Parquet shards from EOS, vectorize each batch, and save .npy shards under afs_vec_dir
+    (train/val/test split).
+
+    Then move to eos_vec_dir.
     """
     os.makedirs(afs_vec_dir, exist_ok=True)
     os.makedirs(eos_vec_dir, exist_ok=True)
@@ -215,30 +223,29 @@ def vectorized_to_local(
     for cname in class_names:
         folder = os.path.join(base_dir, folder_map[cname])
         files = sorted(
-            f for f in os.listdir(folder)
-            if f.endswith(".parquet") and not f.startswith(".")
+            f for f in os.listdir(folder) if f.endswith(".parquet") and not f.startswith(".")
         )
         counters = 0
         split_idx = 0  # 0=train, 1=val, 2=test
         split_limit = split_counts[split_idx]
-        
+
         for split in split_names:
             existing_files = []
             split_folder = os.path.join(eos_vec_dir, split, folder_map[cname])
             if os.path.exists(split_folder):
-                existing_files.extend(f for f in os.listdir(split_folder) if f.endswith("_x.npy"))      
+                existing_files.extend(f for f in os.listdir(split_folder) if f.endswith("_x.npy"))
             if len(existing_files) * 10000 >= split_counts[split_idx]:
-                print(f"🟡 Skipping {cname} {split} split (already have enough files)") 
+                print(f"🟡 Skipping {cname} {split} split (already have enough files)")
                 if split_idx == 2:
-                    files = [] 
-                    break 
+                    files = []
+                    break
                 split_idx += 1
                 split_limit = split_counts[split_idx]
                 skip = len(existing_files)
                 if skip >= len(files):
-                   files = []
+                    files = []
                 else:
-                   files = files[skip:]
+                    files = files[skip:]
 
         for f in files:
             if counters >= split_limit:
@@ -310,27 +317,28 @@ def worker_init_fn(worker_id):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    
-    
+
+
 # ============================================================
 # CHECK IF ENOUGH FILES ARE PRESENT IN A TARGET DIRECTORY
 # ============================================================
-def has_enough_events(target: str) -> bool:
+def has_enough_events(target: str, train_val_test_split_per_class, classnames, folder) -> bool:
     if not target or not os.path.exists(target):
         return False
     split_names = ["train", "val", "test"]
     # assume each _x.npy shard contains up to 10_000 events
     events_per_file = 10000
-    for split, needed_events in zip(split_names, self.train_val_test_split_per_class):
+    for split, needed_events in zip(split_names, train_val_test_split_per_class):
         needed_files_per_class = math.ceil(needed_events / events_per_file)
-        for cname in self.classnames:
-            split_folder = os.path.join(target, split, self.folder[cname])
+        for cname in classnames:
+            split_folder = os.path.join(target, split, folder[cname])
             if not os.path.exists(split_folder):
                 return False
             existing = [f for f in os.listdir(split_folder) if f.endswith("_x.npy")]
             if len(existing) < needed_files_per_class:
                 return False
     return True
+
 
 # ============================================================
 # ESTIMATE MEAN AND STD FROM DATASET
@@ -356,7 +364,7 @@ def estimate_mean_std(vectorized_train_dir, per_class_limit=None):
             delta = batch_mean - mean
             total_count = count + n
             mean += delta * n / total_count
-            M2 += batch_var * n + (delta ** 2) * count * n / total_count
+            M2 += batch_var * n + (delta**2) * count * n / total_count
             count = total_count
 
     var = M2 / max(count - 1, 1)

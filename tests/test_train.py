@@ -97,16 +97,18 @@ def test_train_resume(tmp_path: Path, cfg_train: DictConfig) -> None:
 
     with open_dict(cfg_train):
         cfg_train.ckpt_path = str(tmp_path / "checkpoints" / "last.ckpt")
-        cfg_train.trainer.max_epochs = 3 # resume for 1 more epochs, somehow need max_epochs=3 to do 1 more epoch
+        cfg_train.trainer.max_epochs = (
+            3  # resume for 1 more epochs, somehow need max_epochs=3 to do 1 more epoch
+        )
         # this probably has to do with IterableDataset not registering completed epochs super nicely
 
     metric_dict_2, _ = train(cfg_train)
 
     files = os.listdir(tmp_path / "checkpoints")
-    #assert "epoch_001.ckpt" in files
+    # assert "epoch_001.ckpt" in files
     # For IterableDataset or short runs, only last.ckpt might exist
     assert any(f in files for f in ["epoch_001.ckpt", "last.ckpt"])
-    #assert "epoch_002.ckpt" not in files
+    # assert "epoch_002.ckpt" not in files
     # this is now in files with max_epochs=3
 
     assert metric_dict_1["train/acc"] < metric_dict_2["train/acc"]
