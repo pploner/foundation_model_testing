@@ -1,9 +1,10 @@
 _target_: src.data.collide2v_datamodule.COLLIDE2VDataModule
 batch_size: 1024 # Needs to be divisible by the number of devices (e.g., if in a distributed setup)
-train_val_test_split_per_class: [500_000, 10_000, 10_000]
+train_val_test_split_per_class: [1_000_000, 20_000, 20_000]
 num_workers: 0
 pin_memory: False
 
+# IMPORTANT: IF YOU CHANGE THE SPLITS OR ANY DATASET CONFIG, CHOOSE A NEW LABEL OR DELETE DATA FOR EXISTING LABELS TO AVOID CONFLICTS!
 label: "QCD_ggHbb"  # label to be used for folder name of vectorized and preprocessed data
 
 paths:
