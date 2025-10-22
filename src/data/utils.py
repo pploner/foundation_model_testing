@@ -182,10 +182,8 @@ def save_feature_map(config, out_dir: str, vlen: int):
 def move_to_eos(local_dir: str, eos_dir: str):
     """Move a directory or file from a local tmpdir to EOS target."""
     os.makedirs(os.path.dirname(eos_dir), exist_ok=True)
-    print(f"→ Moving {local_dir} → {eos_dir}")
     try:
         shutil.move(local_dir, eos_dir)
-        print(f"✅ Moved to {eos_dir}")
     except Exception as e:
         print(f"⚠️ Move failed: {e}")
 
@@ -225,32 +223,34 @@ def vectorized_to_local(
         files = sorted(
             f for f in os.listdir(folder) if f.endswith(".parquet") and not f.startswith(".")
         )
-        counters = 0
-        split_idx = 0  # 0=train, 1=val, 2=test
-        split_limit = split_counts[split_idx]
 
-        for split in split_names:
+        glob_split_idx = 0
+
+
+        for split_idx, split in enumerate(split_names):
             existing_files = []
             split_folder = os.path.join(eos_vec_dir, split, folder_map[cname])
             if os.path.exists(split_folder):
                 existing_files.extend(f for f in os.listdir(split_folder) if f.endswith("_x.npy"))
             if len(existing_files) * 10000 >= split_counts[split_idx]:
                 print(f"🟡 Skipping {cname} {split} split (already have enough files)")
-                if split_idx == 2:
-                    files = []
-                    break
-                split_idx += 1
-                split_limit = split_counts[split_idx]
                 skip = len(existing_files)
                 if skip >= len(files):
                     files = []
                 else:
                     files = files[skip:]
+                glob_split_idx += 1
+                continue
+
+        if glob_split_idx >= len(split_names):
+            continue
+
+        split_limit = split_counts[glob_split_idx]
+        counters = 0
+
+        print(f"🟡 Building {split_names[glob_split_idx]} split for class {cname}...")
 
         for f in files:
-            if counters >= split_limit:
-                break
-
             path = os.path.join(folder, f)
             print(f"→ Processing {path}")
 
@@ -279,12 +279,11 @@ def vectorized_to_local(
             feats_cat = np.concatenate(all_feats, axis=0)
             labels_cat = np.concatenate(all_labels, axis=0)
 
-            # assign split
-            while counters > split_limit and split_idx < 2:
-                counters = 0
-                split_idx += 1
-                split_limit += split_counts[split_idx]
-            split = split_names[split_idx]
+
+
+            split = split_names[glob_split_idx]
+
+
 
             afs_split_dir = os.path.join(afs_vec_dir, split, folder_map[cname])
             eos_split_dir = os.path.join(eos_vec_dir, split, folder_map[cname])
@@ -301,7 +300,16 @@ def vectorized_to_local(
             move_to_eos(local_x, os.path.join(eos_split_dir, f"{base}_x.npy"))
             move_to_eos(local_y, os.path.join(eos_split_dir, f"{base}_y.npy"))
 
-            print(f"  ✓ Saved {split}/{base}: {feats_cat.shape}")
+            print(f"✅ Saved {split}/{base}: {feats_cat.shape}")
+
+            # change split if current split is filled
+            if counters >= split_limit:
+                counters = 0
+                glob_split_idx += 1
+                if glob_split_idx >= len(split_names):
+                    break
+                split_limit = split_counts[glob_split_idx]
+                print(f"🟡 Building {split_names[glob_split_idx]} split for class {cname}...")
 
     print(f"✅ Finished vectorizing → {eos_vec_dir}")
 
