@@ -37,20 +37,6 @@ conda activate myenv
 pip install -r requirements.txt
 ```
 
-#### Conda
-
-```bash
-# clone project
-git clone https://github.com/pploner/foundation_model_testing.git
-cd foundation_model_testing
-
-# create conda environment and install dependencies
-conda env create -f environment.yaml -n myenv
-
-# activate conda environment
-conda activate myenv
-```
-
 ## How to run
 
 Train model with default configuration
