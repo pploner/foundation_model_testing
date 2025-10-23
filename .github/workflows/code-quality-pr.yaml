@@ -1,3 +1,5 @@
+# DISABLED FOR NOW BECAUSE PRE-COMMIT IS DEPRECEATED
+
 # This workflow finds which files were changed, prints them,
 # and runs `pre-commit` on those files.
 
@@ -6,9 +8,9 @@
 
 name: Code Quality PR
 
-on:
-  pull_request:
-    branches: [main, "release/*", "dev"]
+#on:
+#  pull_request:
+#    branches: [main, "release/*", "dev"]
 
 jobs:
   code-quality:
