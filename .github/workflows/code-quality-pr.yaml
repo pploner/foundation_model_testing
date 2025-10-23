@@ -1,5 +1,3 @@
-# DISABLED FOR NOW BECAUSE PRE-COMMIT IS DEPRECEATED
-
 # This workflow finds which files were changed, prints them,
 # and runs `pre-commit` on those files.
 
@@ -8,9 +6,9 @@
 
 name: Code Quality PR
 
-#on:
-#  pull_request:
-#    branches: [main, "release/*", "dev"]
+on:
+  pull_request:
+    branches: [main, "release/*", "dev"]
 
 jobs:
   code-quality:
@@ -33,6 +31,6 @@ jobs:
         run: echo '${{ steps.file_changes.outputs.files}}'
 
       - name: Run pre-commits
-        uses: pre-commit/action@v2.0.3
+        uses: pre-commit/action@v3.0.0
         with:
           extra_args: --files ${{ steps.file_changes.outputs.files}}
