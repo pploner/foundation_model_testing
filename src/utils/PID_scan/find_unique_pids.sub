@@ -1,0 +1,19 @@
+executable = find_unique_pids.sh
+output     = /afs/cern.ch/work/p/phploner/foundation_model_testing/logs/find_unique_pids.out
+error      = /afs/cern.ch/work/p/phploner/foundation_model_testing/logs/find_unique_pids.err
+log        = /afs/cern.ch/work/p/phploner/foundation_model_testing/logs/find_unique_pids.log
+
+universe = vanilla
+
+# Resources
+request_cpus = 16
+request_memory = 32000
+request_disk = 1G
+transfer_input_files = find_unique_pids.sh, find_all_PIDs.py
+should_transfer_files = YES
+when_to_transfer_output = ON_EXIT
+
++MaxRuntime = 500000
+
+
+queue
