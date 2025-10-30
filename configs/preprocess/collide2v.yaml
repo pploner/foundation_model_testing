@@ -1,0 +1,39 @@
+enabled: true
+mode: fit_and_apply      # or apply_only
+fit_num_files_per_class: 5
+
+# Preprocessing transformation methods: identity, log1p, trig, onehot
+feature_transforms:
+  pt: log1p
+  eta: identity
+  phi: trig
+  mass: log1p
+  pid: onehot
+  charge: onehot
+  btag: onehot
+  puppiw: identity
+  met: log1p
+  vertexpt2: identity
+  vertexcoord: identity
+  EhadOverEem: identity
+  isolation: identity
+  count: identity
+  other: identity
+
+# Normalization methods: none, minmax, robust, standard
+feature_normalizations:
+  pt: robust
+  eta: robust
+  phi: none
+  mass: robust
+  pid: none
+  charge: none
+  btag: none
+  puppiw: robust
+  met: robust
+  vertexpt2: robust
+  vertexcoord: robust
+  EhadOverEem: robust
+  isolation: robust
+  count: minmax
+  other: robust

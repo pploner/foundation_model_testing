@@ -90,10 +90,15 @@ datasets_config:
 
   met:
     cols:
-      - FullReco_PUPPIMET_MET
-      - FullReco_PUPPIMET_Phi
       - FullReco_MET_MET
       - FullReco_MET_Phi
+    topk: null   # scalar values
+    count: false
+
+  puppi_met:
+    cols:
+      - FullReco_PUPPIMET_MET
+      - FullReco_PUPPIMET_Phi
     topk: null   # scalar values
     count: false
 
@@ -159,6 +164,7 @@ datasets_config:
 # "HH bbZZ"
 # "HH bbgammagamma"
 
+preprocess: ${preprocess}
 
 to_classify:
   QCD: "QCD inclusive"

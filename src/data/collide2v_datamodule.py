@@ -1,9 +1,9 @@
 import os
-import random
 from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 import torch
+import json
 from lightning import LightningDataModule
 from torch.utils.data import (
     ConcatDataset,
@@ -12,8 +12,6 @@ from torch.utils.data import (
     IterableDataset,
     random_split,
 )
-from torchvision.datasets import MNIST
-from torchvision.transforms import transforms
 
 from src.data.datasets import LocalVectorDataset, ShuffleBuffer
 from src.data.utils import (
@@ -24,6 +22,8 @@ from src.data.utils import (
     vectorized_to_local,
     worker_init_fn,
 )
+
+from src.preprocessing.preprocess import PreprocessingPipeline
 
 
 class COLLIDE2VDataModule(LightningDataModule):
@@ -77,6 +77,7 @@ class COLLIDE2VDataModule(LightningDataModule):
         label: str = "test",
         paths: Optional[Dict[str, str]] = None,
         datasets_config: Optional[Dict[str, Any]] = None,
+        preprocess: Optional[Dict[str, Any]] = None,
         to_classify: Optional[Dict[str, str]] = None,
         process_to_folder: Optional[Dict[str, str]] = None,
         seed: int = 42,
@@ -94,6 +95,7 @@ class COLLIDE2VDataModule(LightningDataModule):
         self.label = label
         self.paths = paths or {}
         self.datasets_config = datasets_config or {}
+        self.preprocess_cfg = preprocess or {}
         self.to_classify = to_classify or {}
         self.process_to_folder = process_to_folder or {}
 
@@ -144,16 +146,39 @@ class COLLIDE2VDataModule(LightningDataModule):
             read_batch_size=512,
         )
 
-        mean, std = estimate_mean_std(os.path.join(self.paths["eos_vec_dir"], "train"), 30000)
-        self.feature_mean = mean
-        self.feature_std = std
+        if self.preprocess_cfg.get("enabled", True):
+            pipeline = PreprocessingPipeline(
+                paths=self.paths,                    # must include: eos_vec_dir, afs_preproc_dir, eos_preproc_dir
+                preprocess_cfg=self.preprocess_cfg,  # contains feature_transforms, feature_normalizations,
+                                                    # fit_num_files_per_class, mode ("fit_and_apply" | "apply_only")
+                process_to_folder=self.folder,       # your process_to_folder mapping
+                class_order=list(self.classnames),   # e.g. ["QCD", "ggHbb"]
+                device="cpu",                        # "cuda" works too for speed
+            )
+            pipeline.run()
+        else:
+            # Safety check pass (verifies EOS has preprocessed data + feature_map)
+            PreprocessingPipeline(
+                paths=self.paths,
+                preprocess_cfg={"enabled": False,
+                    "feature_transforms": {},
+                    "feature_normalizations": {}},
+                process_to_folder=self.folder,
+                class_order=list(self.classnames),
+            ).run()
 
-        print(
-            f"🟡 For first 10 features, estimated mean: {self.feature_mean[:10]}"
-            f" and std: {self.feature_std[:10]}"
-        )
-
-        # INCLUDE HERE PREPROCESSING STEPS AND PLOTTING IF NEEDED
+        # ✅ Load the new, expanded feature dimension from preprocessed norm_stats.json
+        norm_stats_path = os.path.join(self.paths["eos_preproc_dir"], "norm_stats.json")
+        if os.path.exists(norm_stats_path):
+            with open(norm_stats_path) as f:
+                fm = json.load(f)
+            self.vlen = fm["_meta"]["num_features_expanded"]
+            print(f"✅ Loaded preprocessed feature dimension: vlen = {self.vlen}")
+        else:
+            raise FileNotFoundError(
+                f"❌ norm_stats.json not found in {self.paths['eos_preproc_dir']}. "
+                "Preprocessing must produce it."
+            )
 
     def setup(self, stage: Optional[str] = None) -> None:
         """Load data. Set variables: `self.data_train`, `self.data_val`, `self.data_test`.
@@ -188,12 +213,11 @@ class COLLIDE2VDataModule(LightningDataModule):
                 os.path.join(self.paths["eos_preproc_dir"], "test")
             )
         else:
-            print(
-                f"🟡 Preprocessed data not found — using vectorized data from {self.paths['eos_vec_dir']}"
+            raise RuntimeError(
+                f"❌ Preprocessed data not found in {self.paths['eos_preproc_dir']}.\n"
+                f"Please run preprocessing first (set `preprocess.enabled=true` in your config) "
+                f"to generate normalized .npy files before training."
             )
-            self.trainstream = LocalVectorDataset(os.path.join(self.paths["eos_vec_dir"], "train"))
-            self.valstream = LocalVectorDataset(os.path.join(self.paths["eos_vec_dir"], "val"))
-            self.teststream = LocalVectorDataset(os.path.join(self.paths["eos_vec_dir"], "test"))
 
         self.shuffled_train = ShuffleBuffer(self.trainstream, buffer_size=10000)
 

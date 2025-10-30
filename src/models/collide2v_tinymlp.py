@@ -87,7 +87,6 @@ class COLLIDE2VTinyMLPLitModule(LightningModule):
         :param x: A tensor of images.
         :return: A tensor of logits.
         """
-        x = self.normalizer(x)
         return self.net(x)
 
     def on_train_start(self) -> None:
@@ -206,20 +205,8 @@ class COLLIDE2VTinyMLPLitModule(LightningModule):
 
             vlen = getattr(dm, "vlen", None)
             num_classes = getattr(dm, "num_classes", None)
-            mean = getattr(dm, "feature_mean", None)
-            std = getattr(dm, "feature_std", None)
 
-            mean = (
-                torch.as_tensor(mean, dtype=torch.float32, device=self.device)
-                if mean is not None
-                else None
-            )
-            std = (
-                torch.as_tensor(std, dtype=torch.float32, device=self.device)
-                if std is not None
-                else None
-            )
-            self.normalizer = Standardize(mean, std)
+            self.normalizer = nn.Identity()
 
             # metric objects for calculating and averaging accuracy across batches
             self.train_acc = Accuracy(task="multiclass", num_classes=num_classes)

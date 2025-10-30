@@ -6,6 +6,7 @@ defaults:
   - _self_
   - paths: fm_testing
   - data: collide2v
+  - preprocess: collide2v
   - model: tinyMLP
   - callbacks: default
   - logger: null # set logger here or use command line (e.g. `python train.py logger=tensorboard`)

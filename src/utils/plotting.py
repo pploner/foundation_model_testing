@@ -98,7 +98,7 @@ def plot_process_features(
 
 
 def plot_all_processes(
-    base_dir: str, output_dir: str = "plots/raw_features", split: str = "train"
+    base_dir: str, output_dir: str = "plots/raw_features", split: str = "train", max_files: int = 5
 ):
     """Load all process subfolders under the specified split and plot features."""
     fmap = load_feature_map(base_dir)
@@ -117,7 +117,7 @@ def plot_all_processes(
     for proc_dir in process_dirs:
         proc_name = os.path.basename(proc_dir)
         print(f"🔹 Processing {proc_name}...")
-        data = load_process_samples(proc_dir, max_files=5)
+        data = load_process_samples(proc_dir, max_files=max_files)
         if data.size == 0:
             print(f"⚠️ No data found for {proc_name}")
             continue
