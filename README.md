@@ -11,7 +11,7 @@
 
 ## Description
 
-At its current state, this repository is loading data from the COLLIDE-2V dataset as saved on EOS, saving it in a vectorized form usable for training, and using it to train a toy tinyMLP classifier. The config allows for many setting with respect to selected features and processes from the dataset, and can be readily used to train different types of classifiers. Preprocessing is (apart from a basic (x-mean)/std normalization) not yet implemented and will be investigated as a next step.
+At its current state, this repository is loading data from the COLLIDE-2V dataset as saved on EOS, saving it in a vectorized form usable for training, and using it to train a toy tinyMLP classifier. The config allows for many setting with respect to selected features and processes from the dataset, and can be readily used to train different types of classifiers. Preprocessing is also implemented and can be specified by feature type in the respective config file. Various feature transforms and normalization methods are possible.
 
 The repository follows the lightning-hydra framework that is accessible here: <a href="https://github.com/ashleve/lightning-hydra-template"> . For more details on the structure of the code please consult the readme there.
 
