@@ -11,6 +11,7 @@ feature_transforms:
   pid: onehot
   charge: onehot
   btag: onehot
+  puppibtag: identity
   puppiw: identity
   met: log1p
   vertexpt2: identity
@@ -29,6 +30,7 @@ feature_normalizations:
   pid: none
   charge: none
   btag: none
+  puppibtag: none
   puppiw: robust
   met: robust
   vertexpt2: robust

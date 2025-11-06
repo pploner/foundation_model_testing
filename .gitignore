@@ -155,3 +155,5 @@ configs/local/default.yaml
 
 # Ignore output plots
 plots/
+phploner.cc
+fm_testing.sif

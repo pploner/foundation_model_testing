@@ -50,6 +50,15 @@ def one_hot_encode(x: torch.Tensor, category_type: str) -> torch.Tensor:
     categories = CATEGORY_MAP[category_type]
     cat_to_index = {cat: idx for idx, cat in enumerate(categories)}
 
+    # Convert to Python ints safely
+    vals = [int(v.item()) for v in x]
+
+    # --- Debug print for unexpected categories ---
+    unexpected = [v for v in vals if v not in cat_to_index]
+    if unexpected:
+        print(f"[DEBUG] Unexpected {category_type} values detected: {sorted(set(unexpected))}")
+        print(f"[DEBUG] dtype={x.dtype}, min={x.min().item()}, max={x.max().item()}")
+
     # Map values to indices
     # NOTE: x may be shape [batch], so iterate element-wise
     idx_tensor = torch.tensor(

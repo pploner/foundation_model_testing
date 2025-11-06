@@ -39,7 +39,7 @@ class PreprocessingPipeline:
         Args:
             paths: expects keys:
                 - eos_vec_dir
-                - afs_preproc_dir
+                - tmp_preproc_dir
                 - eos_preproc_dir
             preprocess_cfg: expects keys:
                 - enabled (bool)
@@ -74,7 +74,7 @@ class PreprocessingPipeline:
         self.output_dim = self._infer_output_dim(self.expanded_fm)
 
         # Ensure output roots exist
-        os.makedirs(self.paths["afs_preproc_dir"], exist_ok=True)
+        os.makedirs(self.paths["tmp_preproc_dir"], exist_ok=True)
         os.makedirs(self.paths["eos_preproc_dir"], exist_ok=True)
 
     # ---------- public entry ----------
@@ -150,9 +150,9 @@ class PreprocessingPipeline:
             for cls in self.class_order:
                 cls_folder = self.proc2fold[cls]
                 in_dir = os.path.join(self.paths["eos_vec_dir"], split, cls_folder)
-                out_afs_dir = os.path.join(self.paths["afs_preproc_dir"], split, cls_folder)
+                out_tmp_dir = os.path.join(self.paths["tmp_preproc_dir"], split, cls_folder)
                 out_eos_dir = os.path.join(self.paths["eos_preproc_dir"], split, cls_folder)
-                os.makedirs(out_afs_dir, exist_ok=True)
+                os.makedirs(out_tmp_dir, exist_ok=True)
                 os.makedirs(out_eos_dir, exist_ok=True)
 
                 files = sorted(glob.glob(os.path.join(in_dir, "*_x.npy")))
@@ -163,7 +163,7 @@ class PreprocessingPipeline:
                 print(f"🟡 Processing {split}/{cls} ({len(files)} files)")
                 for fpath in files:
                     fname = os.path.basename(fpath)
-                    tmp_out = os.path.join(out_afs_dir, fname)
+                    tmp_out = os.path.join(out_tmp_dir, fname)
                     final_out = os.path.join(out_eos_dir, fname)
 
                     # Skip if already present at EOS
