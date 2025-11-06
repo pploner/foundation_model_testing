@@ -22,8 +22,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="plots/raw_features",
-        help="Output directory for saved plots.",
+        default="plots",
+        help="Output directory for saved plots, will automatically create subdirectories for label and vectorized vs preprocessed.",
     )
     parser.add_argument(
         "--split",

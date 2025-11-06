@@ -98,13 +98,21 @@ def plot_process_features(
 
 
 def plot_all_processes(
-    base_dir: str, output_dir: str = "plots/raw_features", split: str = "train", max_files: int = 5
+    base_dir: str, output_dir: str = "plots", split: str = "train", max_files: int = 5
 ):
     """Load all process subfolders under the specified split and plot features."""
     fmap = load_feature_map(base_dir)
     split_dir = os.path.join(base_dir, split)
     if not os.path.exists(split_dir):
         raise FileNotFoundError(f"Split folder '{split_dir}' not found under {base_dir}")
+
+    label = os.path.basename(os.path.dirname(base_dir))
+    output_dir = os.path.join(output_dir, label)
+
+    if base_dir.endswith("vectorized"):
+        output_dir = os.path.join(output_dir, "raw_features")
+    elif base_dir.endswith("preprocessed"):
+        output_dir = os.path.join(output_dir, "preprocessed_features")
 
     process_dirs = [
         os.path.join(split_dir, d)
