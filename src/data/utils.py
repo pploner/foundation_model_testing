@@ -4,6 +4,8 @@ import os
 import random
 import shutil
 
+from pathlib import Path
+
 import awkward as ak
 import numpy as np
 import pyarrow as pa
@@ -193,7 +195,7 @@ def move_to_eos(local_dir: str, eos_dir: str):
 # ============================================================
 
 
-def vectorized_to_local(
+def vectorize_to_local(
     base_dir: str,
     config: dict,
     class_names: list,
@@ -201,17 +203,17 @@ def vectorized_to_local(
     labels_map: dict,
     all_cols: list,
     vlen: int,
-    afs_vec_dir: str,
+    tmp_vec_dir: str,
     eos_vec_dir: str,
     split_counts: list,  # [train, val, test]
     read_batch_size: int = 512,  # this is only for how many are read from Parquet at once
 ):
-    """Stream Parquet shards from EOS, vectorize each batch, and save .npy shards under afs_vec_dir
+    """Stream Parquet shards from EOS, vectorize each batch, and save .npy shards under tmp_vec_dir
     (train/val/test split).
 
     Then move to eos_vec_dir.
     """
-    os.makedirs(afs_vec_dir, exist_ok=True)
+    os.makedirs(tmp_vec_dir, exist_ok=True)
     os.makedirs(eos_vec_dir, exist_ok=True)
     save_feature_map(config, eos_vec_dir, vlen)
 
@@ -260,7 +262,6 @@ def vectorized_to_local(
                     tbl = pa.Table.from_batches([batch])
                     arrays = {col: ak.from_arrow(tbl[col]) for col in all_cols}
                     feats = build_vectors_batch(arrays, config, fill=0.0)
-                    n = feats.shape[0]
 
                     remain = split_limit - counters
                     feats = feats[:remain]
@@ -285,14 +286,14 @@ def vectorized_to_local(
 
 
 
-            afs_split_dir = os.path.join(afs_vec_dir, split, folder_map[cname])
+            tmp_split_dir = os.path.join(tmp_vec_dir, split, folder_map[cname])
             eos_split_dir = os.path.join(eos_vec_dir, split, folder_map[cname])
-            os.makedirs(afs_split_dir, exist_ok=True)
+            os.makedirs(tmp_split_dir, exist_ok=True)
             os.makedirs(eos_split_dir, exist_ok=True)
 
             base = os.path.splitext(f)[0]
-            local_x = os.path.join(afs_split_dir, f"{base}_x.npy")
-            local_y = os.path.join(afs_split_dir, f"{base}_y.npy")
+            local_x = os.path.join(tmp_split_dir, f"{base}_x.npy")
+            local_y = os.path.join(tmp_split_dir, f"{base}_y.npy")
 
             np.save(local_x, feats_cat)
             np.save(local_y, labels_cat)
@@ -346,35 +347,3 @@ def has_enough_events(target: str, train_val_test_split_per_class, classnames, f
             if len(existing) < needed_files_per_class:
                 return False
     return True
-
-
-# ============================================================
-# ESTIMATE MEAN AND STD FROM DATASET
-# ============================================================
-def estimate_mean_std(vectorized_train_dir, per_class_limit=None):
-    count = 0
-    mean = None
-    M2 = None
-
-    ds = LocalVectorDataset(vectorized_train_dir, per_class_limit=per_class_limit)
-
-    for xb, _ in ds:  # xb shape [N, VLEN]
-        n = xb.shape[0]
-
-        batch_mean = xb.mean(dim=0)
-        batch_var = xb.var(dim=0, unbiased=False)
-
-        if mean is None:
-            mean = batch_mean
-            M2 = batch_var * n
-            count = n
-        else:
-            delta = batch_mean - mean
-            total_count = count + n
-            mean += delta * n / total_count
-            M2 += batch_var * n + (delta**2) * count * n / total_count
-            count = total_count
-
-    var = M2 / max(count - 1, 1)
-    std = torch.sqrt(var + 1e-6)
-    return mean, std

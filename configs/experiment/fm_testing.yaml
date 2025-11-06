@@ -22,20 +22,26 @@ trainer:
   gradient_clip_val: 0.5
 
 model:
-  optimizer:
-    lr: 0.002
-  net:
-    lin1_size: 128
-    lin2_size: 256
-    lin3_size: 64
+  hidden_dim: 256
+  lr: 1e-3
+  weight_decay: 1e-2
   compile: false
 
-data:
-  batch_size: 64
+  optimizer:
+    _target_: torch.optim.AdamW
+    _partial_: true
+    lr: 1e-3
+    weight_decay: 1e-2
 
-logger:
-  wandb:
-    tags: ${tags}
-    group: "mnist"
-  aim:
-    experiment: "mnist"
+  scheduler:
+    _target_: torch.optim.lr_scheduler.CosineAnnealingLR
+    _partial_: true
+    T_max: ${trainer.max_epochs}
+
+data:
+  batch_size: 1024
+  train_val_test_split_per_class: [1_000_000, 20_000, 20_000]
+  num_workers: 0
+  pin_memory: False
+
+#logger:

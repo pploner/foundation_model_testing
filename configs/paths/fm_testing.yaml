@@ -6,8 +6,8 @@ root_dir: ${oc.env:PROJECT_ROOT}
 # path to dataset directory
 dataset_dir: /eos/project/f/foundational-model-dataset/samples/production_final
 
-# path to afs data directory for writing vectorized and preprocessed data
-afs_data_dir: /afs/cern.ch/work/p/phploner/foundation_model_testing/data
+# path to tmp data directory for writing vectorized and preprocessed data
+tmp_data_dir: /afs/cern.ch/work/p/phploner/foundation_model_testing/data
 
 # path to eos data directory for storing vectorized and preprocessed data
 eos_data_dir: /eos/user/p/phploner/foundation_model_testing_data

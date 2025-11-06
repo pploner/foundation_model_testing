@@ -1,15 +1,15 @@
 _target_: src.data.collide2v_datamodule.COLLIDE2VDataModule
 batch_size: 1024 # Needs to be divisible by the number of devices (e.g., if in a distributed setup)
-train_val_test_split_per_class: [1_000_000, 20_000, 20_000]
-num_workers: 0
+train_val_test_split_per_class: [9_960_000, 20_000, 20_000]
+num_workers: 4
 pin_memory: False
 
 # IMPORTANT: IF YOU CHANGE THE SPLITS OR ANY DATASET CONFIG, CHOOSE A NEW LABEL OR DELETE DATA FOR EXISTING LABELS TO AVOID CONFLICTS!
-label: "QCD_ggHbb"  # label to be used for folder name of vectorized and preprocessed data
+label: "QCD_ggHbb_test"  # label to be used for folder name of vectorized and preprocessed data
 
 paths:
-  afs_vec_dir: ${paths.afs_data_dir}/${data.label}/vectorized/
-  afs_preproc_dir: ${paths.afs_data_dir}/${data.label}/preprocessed/
+  tmp_vec_dir: ${paths.tmp_data_dir}/${data.label}/vectorized/
+  tmp_preproc_dir: ${paths.tmp_data_dir}/${data.label}/preprocessed/
   eos_vec_dir: ${paths.eos_data_dir}/${data.label}/vectorized/
   eos_preproc_dir: ${paths.eos_data_dir}/${data.label}/preprocessed/
   dataset_dir: ${paths.dataset_dir}
@@ -40,18 +40,18 @@ datasets_config:
       - FullReco_PUPPIPart_Mass
       - FullReco_PUPPIPart_PID
       - FullReco_PUPPIPart_PuppiW
-    topk: 20
+    topk: 100
     count: true
 
   jets:
     cols:
-      - FullReco_JetAK4_PT
-      - FullReco_JetAK4_Eta
-      - FullReco_JetAK4_Phi
-      - FullReco_JetAK4_Mass
-      - FullReco_JetAK4_BTag
-      - FullReco_JetAK4_Charge
-    topk: 4
+      - FullReco_JetPuppiAK4_PT
+      - FullReco_JetPuppiAK4_Eta
+      - FullReco_JetPuppiAK4_Phi
+      - FullReco_JetPuppiAK4_Mass
+      - FullReco_JetPuppiAK4_BTag
+      - FullReco_JetPuppiAK4_Charge
+    topk: 10
     count: true
 
   electrons:
@@ -86,13 +86,6 @@ datasets_config:
       - FullReco_PrimaryVertex_SumPT2
       - FullReco_PrimaryVertex_Z
     topk: 1
-    count: false
-
-  met:
-    cols:
-      - FullReco_MET_MET
-      - FullReco_MET_Phi
-    topk: null   # scalar values
     count: false
 
   puppi_met:

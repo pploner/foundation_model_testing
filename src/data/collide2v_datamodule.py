@@ -16,10 +16,9 @@ from torch.utils.data import (
 from src.data.datasets import LocalVectorDataset, ShuffleBuffer
 from src.data.utils import (
     compute_vlen,
-    estimate_mean_std,
     get_all_cols,
     has_enough_events,
-    vectorized_to_local,
+    vectorize_to_local,
     worker_init_fn,
 )
 
@@ -132,7 +131,7 @@ class COLLIDE2VDataModule(LightningDataModule):
         """
 
         print(f"🟡 Generating vectorized data in {self.paths['eos_vec_dir']}")
-        vectorized_to_local(
+        vectorize_to_local(
             base_dir=self.paths["dataset_dir"],
             config=self.datasets_config,
             class_names=self.classnames,
@@ -140,7 +139,7 @@ class COLLIDE2VDataModule(LightningDataModule):
             labels_map=self.labels,
             all_cols=get_all_cols(self.datasets_config),
             vlen=self.vlen,
-            afs_vec_dir=self.paths["afs_vec_dir"],
+            tmp_vec_dir=self.paths["tmp_vec_dir"],
             eos_vec_dir=self.paths["eos_vec_dir"],
             split_counts=self.train_val_test_split_per_class,
             read_batch_size=512,
@@ -148,7 +147,7 @@ class COLLIDE2VDataModule(LightningDataModule):
 
         if self.preprocess_cfg.get("enabled", True):
             pipeline = PreprocessingPipeline(
-                paths=self.paths,                    # must include: eos_vec_dir, afs_preproc_dir, eos_preproc_dir
+                paths=self.paths,                    # must include: eos_vec_dir, tmp_preproc_dir, eos_preproc_dir
                 preprocess_cfg=self.preprocess_cfg,  # contains feature_transforms, feature_normalizations,
                                                     # fit_num_files_per_class, mode ("fit_and_apply" | "apply_only")
                 process_to_folder=self.folder,       # your process_to_folder mapping

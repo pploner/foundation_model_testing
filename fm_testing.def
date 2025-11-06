@@ -1,0 +1,32 @@
+Bootstrap: docker
+From: python:3.10-slim
+
+%labels
+    Author phploner
+    Description Foundation Model Testing environment (PyTorch + Lightning + Hydra)
+    Version v1.0
+
+%environment
+    export PYTHONUNBUFFERED=1
+    export PYTHONPATH=/opt/foundation_model_testing:$PYTHONPATH
+    export PATH=/usr/local/bin:$PATH
+
+%post
+    apt-get update && apt-get install -y --no-install-recommends \
+        git \
+        build-essential \
+        wget \
+        curl \
+        ca-certificates && \
+        rm -rf /var/lib/apt/lists/*
+
+    # Upgrade pip and install your dependencies
+    python -m pip install --upgrade pip
+    pip install -r /opt/foundation_model_testing/requirements.txt
+
+%files
+    requirements.txt /opt/foundation_model_testing/requirements.txt
+
+%runscript
+    echo "[fm_testing] running: $@"
+    exec python "$@"

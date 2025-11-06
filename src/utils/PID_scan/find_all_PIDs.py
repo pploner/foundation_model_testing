@@ -38,7 +38,7 @@ for batch_idx in range(num_batches):
     t0 = time.time()
     dataset = ds.dataset(batch_files, format="parquet")
     # request only the column we need; use_threads=True lets Arrow parallelize IO/decoding
-    table = dataset.scanner(columns=["FullReco_PFCand_PID"], use_threads=True).to_table()
+    table = dataset.scanner(columns=["FullReco_PUPPIPart_PID"], use_threads=True).to_table()
 
 
     # vectorized flatten + unique via pyarrow.compute (works on ChunkedArray / ListArray)

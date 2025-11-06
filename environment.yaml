@@ -1,3 +1,5 @@
+# THIS FILE IS NOT YET CORRECTLY SET UP TO WORK WITH; USE REQUIREMENTS.TXT INSTEAD
+
 # reasons you might want to use `environment.yaml` instead of `requirements.txt`:
 # - pip installs packages in a loop, without ensuring dependencies across all packages
 #   are fulfilled simultaneously, but conda achieves proper dependency control across
