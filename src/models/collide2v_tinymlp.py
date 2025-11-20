@@ -8,7 +8,7 @@ from torchmetrics import MaxMetric, MeanMetric
 from torchmetrics.classification import MulticlassAUROC
 from torchmetrics.classification.accuracy import Accuracy
 
-from .components.mlp import Standardize, TinyMLP
+from .components.mlp import TinyMLP
 
 
 class COLLIDE2VTinyMLPLitModule(LightningModule):
@@ -162,9 +162,18 @@ class COLLIDE2VTinyMLPLitModule(LightningModule):
 
     def on_validation_epoch_end(self) -> None:
         "Lightning hook that is called when a validation epoch ends."
-        acc = self.val_acc.compute()  # get current val acc
+        # Compute metrics only if AUROC has received any samples
+        try:
+            acc = self.val_acc.compute()
+        except Exception:
+            acc = torch.tensor(0.0, device=self.device)
+
+        try:
+            auroc = self.val_auroc.compute()
+        except Exception:
+            auroc = torch.tensor(0.0, device=self.device)
+
         self.val_acc_best(acc)  # update best so far val acc
-        auroc = self.val_auroc.compute()
         self.val_auroc_best(auroc)  # update best so far val auroc
         # log `val_acc_best` as a value through `.compute()` method, instead of as a metric object
         # otherwise metric would be reset by lightning after each epoch
