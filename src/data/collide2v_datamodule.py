@@ -1,15 +1,11 @@
 import os
 from typing import Any, Dict, Optional, Tuple
 
-import numpy as np
-import torch
 import json
 from lightning import LightningDataModule
 from torch.utils.data import (
-    ConcatDataset,
     DataLoader,
     Dataset,
-    IterableDataset,
     random_split,
 )
 
@@ -149,7 +145,6 @@ class COLLIDE2VDataModule(LightningDataModule):
             pipeline = PreprocessingPipeline(
                 paths=self.paths,                    # must include: eos_vec_dir, tmp_preproc_dir, eos_preproc_dir
                 preprocess_cfg=self.preprocess_cfg,  # contains feature_transforms, feature_normalizations,
-                                                    # fit_num_files_per_class, mode ("fit_and_apply" | "apply_only")
                 process_to_folder=self.folder,       # your process_to_folder mapping
                 class_order=list(self.classnames),   # e.g. ["QCD", "ggHbb"]
                 device="cpu",                        # "cuda" works too for speed
@@ -204,13 +199,9 @@ class COLLIDE2VDataModule(LightningDataModule):
             self.folder,
         ):
             print(f"🟡 Preprocessed data found — using from {self.paths['eos_preproc_dir']}")
-            self.trainstream = LocalVectorDataset(
-                os.path.join(self.paths["eos_preproc_dir"], "train")
-            )
-            self.valstream = LocalVectorDataset(os.path.join(self.paths["eos_preproc_dir"], "val"))
-            self.teststream = LocalVectorDataset(
-                os.path.join(self.paths["eos_preproc_dir"], "test")
-            )
+            self.trainstream = LocalVectorDataset(os.path.join(self.paths["eos_preproc_dir"], "train"), shuffle_file_order=True)
+            self.valstream = LocalVectorDataset(os.path.join(self.paths["eos_preproc_dir"], "val"), shuffle_file_order=False)
+            self.teststream = LocalVectorDataset(os.path.join(self.paths["eos_preproc_dir"], "test"), shuffle_file_order=False)
         else:
             raise RuntimeError(
                 f"❌ Preprocessed data not found in {self.paths['eos_preproc_dir']}.\n"
@@ -218,7 +209,7 @@ class COLLIDE2VDataModule(LightningDataModule):
                 f"to generate normalized .npy files before training."
             )
 
-        self.shuffled_train = ShuffleBuffer(self.trainstream, buffer_size=10000)
+        self.shuffled_train = ShuffleBuffer(self.trainstream, buffer_size=100000)
 
     def train_dataloader(self) -> DataLoader[Any]:
         """Create and return the train dataloader.
@@ -227,7 +218,7 @@ class COLLIDE2VDataModule(LightningDataModule):
         """
         return DataLoader(
             dataset=self.shuffled_train,
-            batch_size=None,
+            batch_size=self.batch_size_per_device,
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
             worker_init_fn=worker_init_fn,
@@ -240,8 +231,8 @@ class COLLIDE2VDataModule(LightningDataModule):
         """
         return DataLoader(
             dataset=self.valstream,
-            batch_size=None,
-            num_workers=self.num_workers,
+            batch_size=self.batch_size_per_device,
+            num_workers=0,
             pin_memory=self.pin_memory,
             worker_init_fn=worker_init_fn,
         )
@@ -253,8 +244,8 @@ class COLLIDE2VDataModule(LightningDataModule):
         """
         return DataLoader(
             dataset=self.teststream,
-            batch_size=None,
-            num_workers=self.num_workers,
+            batch_size=self.batch_size_per_device,
+            num_workers=0,
             pin_memory=self.pin_memory,
             worker_init_fn=worker_init_fn,
         )
