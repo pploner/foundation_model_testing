@@ -43,6 +43,8 @@ PATTERN_TO_GROUP = [
     (r'_PrimaryVertex_[XYZT]$', 'vertexcoord'),
     (r'_IsolationVarRhoCorr$', 'isolation'),
     (r'_EhadOverEem$', 'EhadOverEem'),
+    (r'_D0$', 'displacement'),
+    (r'_DZ$', 'displacement'),
 ]
 
 def infer_group(feature_name: str) -> str:

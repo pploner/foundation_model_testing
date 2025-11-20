@@ -1,5 +1,5 @@
-enabled: true
-mode: fit_and_apply      # or apply_only
+enabled: false
+mode: fit_and_apply      # or apply_only or fit_only
 fit_num_files_per_class: 5
 
 # Preprocessing transformation methods: identity, log1p, trig, onehot
@@ -19,6 +19,7 @@ feature_transforms:
   EhadOverEem: identity
   isolation: identity
   count: identity
+  displacement: identity
   other: identity
 
 # Normalization methods: none, minmax, robust, standard
@@ -30,7 +31,7 @@ feature_normalizations:
   pid: none
   charge: none
   btag: none
-  puppibtag: none
+  puppibtag: minmax
   puppiw: robust
   met: robust
   vertexpt2: robust
@@ -38,4 +39,5 @@ feature_normalizations:
   EhadOverEem: robust
   isolation: robust
   count: minmax
+  displacement: robust
   other: robust
