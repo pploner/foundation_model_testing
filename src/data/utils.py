@@ -189,6 +189,61 @@ def move_to_eos(local_dir: str, eos_dir: str):
     except Exception as e:
         print(f"⚠️ Move failed: {e}")
 
+def load_global_filelist() -> dict:
+    """Load the precomputed file event counts JSON from nEvents_scan."""
+    base_path = Path("/afs/.cern.ch/work/p/phploner/foundation_model_testing/src/utils/nEvents_scan/file_event_counts.json")
+    if not base_path.exists():
+        raise FileNotFoundError(f"Global file list not found: {base_path}")
+    with open(base_path) as f:
+        data = json.load(f)
+    print(f"🟢 Loaded global file list ({sum(len(v) for v in data.values())} files) from {base_path}")
+    return data
+
+def make_split_manifest(global_filelist, split_counts, include_folders, seed=42):
+    """
+    Absolute target rows per class: greedily assign whole files until
+    each split reaches its target in `split_counts` (within one file).
+    Extra files are ignored once test target is met.
+    """
+    import numpy as np
+
+    rng = np.random.default_rng(seed)
+    split_names = ["train", "val", "test"]
+    targets_abs = np.array(split_counts, dtype=int)  # e.g., [50000, 20000, 20000]
+
+    manifest = {}
+    for folder in include_folders:
+        items = [(fn, int(n)) for fn, n in global_filelist.get(folder, {}).items()]
+        if not items:
+            manifest[folder] = {s: [] for s in split_names}
+            continue
+
+        rng.shuffle(items)
+
+        buckets = {s: [] for s in split_names}
+        split_idx = 0
+        acc = 0
+
+        for fname, n in items:
+            # if all splits done, stop
+            if split_idx >= len(split_names):
+                break
+
+            buckets[split_names[split_idx]].append(fname)
+            acc += n
+
+            # move to next split once target reached (allow overshoot by one file)
+            if acc >= targets_abs[split_idx]:
+                split_idx += 1
+                acc = 0
+
+        # ensure remaining splits exist as empty lists
+        for s in split_names:
+            buckets.setdefault(s, [])
+
+        manifest[folder] = buckets
+
+    return manifest
 
 # ============================================================
 # VECTORIZE AND SAVE LOCALLY
@@ -206,111 +261,120 @@ def vectorize_to_local(
     tmp_vec_dir: str,
     eos_vec_dir: str,
     split_counts: list,  # [train, val, test]
-    read_batch_size: int = 512,  # this is only for how many are read from Parquet at once
+    read_batch_size: int = 512,
+    split_manifest: dict | None = None,
 ):
-    """Stream Parquet shards from EOS, vectorize each batch, and save .npy shards under tmp_vec_dir
-    (train/val/test split).
+    """Vectorize Parquet shards using a deterministic split manifest.
 
-    Then move to eos_vec_dir.
+    If `split_manifest_path` is given, it defines which files belong
+    to train/val/test. Otherwise, the manifest is created or reused
+    in `eos_vec_dir/split_manifest.json`.
+
+    Each file in the manifest is converted into .npy shards under:
+        eos_vec_dir/{train,val,test}/{class_folder}/...
     """
+
     os.makedirs(tmp_vec_dir, exist_ok=True)
     os.makedirs(eos_vec_dir, exist_ok=True)
     save_feature_map(config, eos_vec_dir, vlen)
 
+    # -------------------------------------------------------------------------
+    # Load or create manifest
+    # -------------------------------------------------------------------------
+    if split_manifest is not None:
+        print("🟡 Using in-memory split manifest (dict provided).")
+    else:
+        manifest_path = os.path.join(eos_vec_dir, "split_manifest.json")
+        if os.path.exists(manifest_path):
+            with open(manifest_path) as f:
+                split_manifest = json.load(f)
+            print(f"🟡 Using existing split manifest: {manifest_path}")
+        else:
+            print("🟢 Building new split manifest from global file list ...")
+            global_filelist = load_global_filelist()
+            include_folders = [folder_map[cname] for cname in class_names if cname in folder_map]
+            print(f"🧩 Including {len(include_folders)} folders in manifest:")
+            for f in include_folders:
+                print(f"   • {f}")
+
+            split_manifest = make_split_manifest(
+                global_filelist=global_filelist,
+                split_counts=split_counts,
+                include_folders=include_folders,
+                seed=42,
+            )
+            with open(manifest_path, "w") as f:
+                json.dump(split_manifest, f, indent=2)
+            print(f"✅ Wrote split manifest → {manifest_path}")
+
+    # -------------------------------------------------------------------------
+    # Vectorize files based on manifest
+    # -------------------------------------------------------------------------
     split_names = ["train", "val", "test"]
-    assert len(split_counts) == 3, "split_counts must have 3 elements"
 
     for cname in class_names:
-        folder = os.path.join(base_dir, folder_map[cname])
-        files = sorted(
-            f for f in os.listdir(folder) if f.endswith(".parquet") and not f.startswith(".")
-        )
-
-        glob_split_idx = 0
-
-
-        for split_idx, split in enumerate(split_names):
-            existing_files = []
-            split_folder = os.path.join(eos_vec_dir, split, folder_map[cname])
-            if os.path.exists(split_folder):
-                existing_files.extend(f for f in os.listdir(split_folder) if f.endswith("_x.npy"))
-            if len(existing_files) * 10000 >= split_counts[split_idx]:
-                print(f"🟡 Skipping {cname} {split} split (already have enough files)")
-                skip = len(existing_files)
-                if skip >= len(files):
-                    files = []
-                else:
-                    files = files[skip:]
-                glob_split_idx += 1
-                continue
-
-        if glob_split_idx >= len(split_names):
+        class_folder = folder_map[cname]
+        label_id = labels_map[cname]
+        if class_folder not in split_manifest:
+            print(f"⚪ Skipping {cname}: not in manifest.")
             continue
 
-        split_limit = split_counts[glob_split_idx]
-        counters = 0
-
-        print(f"🟡 Building {split_names[glob_split_idx]} split for class {cname}...")
-
-        for f in files:
-            path = os.path.join(folder, f)
-            print(f"→ Processing {path}")
-
-            all_feats, all_labels = [], []
-            with pq.ParquetFile(path) as pqf:
-                for batch in pqf.iter_batches(columns=all_cols, batch_size=read_batch_size):
-                    tbl = pa.Table.from_batches([batch])
-                    arrays = {col: ak.from_arrow(tbl[col]) for col in all_cols}
-                    feats = build_vectors_batch(arrays, config, fill=0.0)
-
-                    remain = split_limit - counters
-                    feats = feats[:remain]
-                    n = feats.shape[0]
-
-                    all_feats.append(feats)
-                    all_labels.append(np.full((n,), labels_map[cname], dtype=np.int64))
-                    counters += n
-
-                    if counters >= split_limit:
-                        break
-
-            if not all_feats:
+        for split_name in split_names:
+            file_list = split_manifest[class_folder].get(split_name, [])
+            if not file_list:
                 continue
 
-            feats_cat = np.concatenate(all_feats, axis=0)
-            labels_cat = np.concatenate(all_labels, axis=0)
+            print(f"🟡 Processing {cname}/{split_name} ({len(file_list)} files)")
 
+            for fname in file_list:
+                folder = os.path.join(base_dir, class_folder)
+                path = os.path.join(folder, fname)
+                base = os.path.splitext(fname)[0]
 
+                tmp_split_dir = os.path.join(tmp_vec_dir, split_name, class_folder)
+                eos_split_dir = os.path.join(eos_vec_dir, split_name, class_folder)
+                os.makedirs(tmp_split_dir, exist_ok=True)
+                os.makedirs(eos_split_dir, exist_ok=True)
 
-            split = split_names[glob_split_idx]
+                dst_x = os.path.join(eos_split_dir, f"{base}_x.npy")
+                dst_y = os.path.join(eos_split_dir, f"{base}_y.npy")
 
+                # Idempotent skip if already vectorized
+                if os.path.exists(dst_x) and os.path.exists(dst_y):
+                    print(f"↪︎ Skipping existing {split_name}/{base}")
+                    continue
 
+                print(f"→ Processing {path}")
+                all_feats, all_labels = [], []
 
-            tmp_split_dir = os.path.join(tmp_vec_dir, split, folder_map[cname])
-            eos_split_dir = os.path.join(eos_vec_dir, split, folder_map[cname])
-            os.makedirs(tmp_split_dir, exist_ok=True)
-            os.makedirs(eos_split_dir, exist_ok=True)
+                try:
+                    with pq.ParquetFile(path) as pqf:
+                        for batch in pqf.iter_batches(columns=all_cols, batch_size=read_batch_size):
+                            tbl = pa.Table.from_batches([batch])
+                            arrays = {col: ak.from_arrow(tbl[col]) for col in all_cols}
+                            feats = build_vectors_batch(arrays, config, fill=0.0)
+                            n = feats.shape[0]
+                            all_feats.append(feats)
+                            all_labels.append(np.full((n,), label_id, dtype=np.int64))
+                except Exception as e:
+                    print(f"❌ Error reading {path}: {e}")
+                    continue
 
-            base = os.path.splitext(f)[0]
-            local_x = os.path.join(tmp_split_dir, f"{base}_x.npy")
-            local_y = os.path.join(tmp_split_dir, f"{base}_y.npy")
+                if not all_feats:
+                    continue
 
-            np.save(local_x, feats_cat)
-            np.save(local_y, labels_cat)
+                feats_cat = np.concatenate(all_feats, axis=0)
+                labels_cat = np.concatenate(all_labels, axis=0)
 
-            move_to_eos(local_x, os.path.join(eos_split_dir, f"{base}_x.npy"))
-            move_to_eos(local_y, os.path.join(eos_split_dir, f"{base}_y.npy"))
+                local_x = os.path.join(tmp_split_dir, f"{base}_x.npy")
+                local_y = os.path.join(tmp_split_dir, f"{base}_y.npy")
+                np.save(local_x, feats_cat)
+                np.save(local_y, labels_cat)
 
-            print(f"✅ Saved {split}/{base}: {feats_cat.shape}")
+                move_to_eos(local_x, dst_x)
+                move_to_eos(local_y, dst_y)
 
-            # change split if current split is filled
-            if counters >= split_limit:
-                counters = 0
-                glob_split_idx += 1
-                if glob_split_idx >= len(split_names):
-                    break
-                split_limit = split_counts[glob_split_idx]
-                print(f"🟡 Building {split_names[glob_split_idx]} split for class {cname}...")
+                print(f"✅ Saved {split_name}/{base}: {feats_cat.shape}")
 
     print(f"✅ Finished vectorizing → {eos_vec_dir}")
 
