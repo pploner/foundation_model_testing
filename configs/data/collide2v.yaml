@@ -5,7 +5,7 @@ num_workers: 4
 pin_memory: False
 
 # IMPORTANT: IF YOU CHANGE THE SPLITS OR ANY DATASET CONFIG, CHOOSE A NEW LABEL OR DELETE DATA FOR EXISTING LABELS TO AVOID CONFLICTS!
-label: "QCD_ggHbb_test"  # label to be used for folder name of vectorized and preprocessed data
+label: "QCD_ggHbb_upscaled"  # label to be used for folder name of vectorized and preprocessed data
 
 paths:
   tmp_vec_dir: ${paths.tmp_data_dir}/${data.label}/vectorized/
@@ -40,7 +40,9 @@ datasets_config:
       - FullReco_PUPPIPart_Mass
       - FullReco_PUPPIPart_PID
       - FullReco_PUPPIPart_PuppiW
-    topk: 100
+      - FullReco_PUPPIPart_D0
+      - FullReco_PUPPIPart_DZ
+    topk: 20
     count: true
 
   jets:
@@ -51,7 +53,7 @@ datasets_config:
       - FullReco_JetPuppiAK4_Mass
       - FullReco_JetPuppiAK4_BTag
       - FullReco_JetPuppiAK4_Charge
-    topk: 10
+    topk: 5
     count: true
 
   electrons:

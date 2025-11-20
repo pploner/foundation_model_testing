@@ -1,6 +1,6 @@
 _target_: src.models.collide2v_tinymlp.COLLIDE2VTinyMLPLitModule
 
-hidden_dim: 256
+hidden_dim: 512
 lr: 1e-3
 weight_decay: 1e-2
 compile: false
