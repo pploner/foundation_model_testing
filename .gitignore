@@ -157,3 +157,6 @@ configs/local/default.yaml
 plots/
 phploner.cc
 fm_testing.sif
+src/utils/dataset_tests/scan_for_negative_jet_masses.ipynb
+notebooks/test_notebook.ipynb
+src/utils/nEvents_scan/file_event_counts.json
