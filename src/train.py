@@ -4,6 +4,8 @@ import hydra
 import lightning as L
 import rootutils
 import torch
+import os
+from lightning.pytorch.utilities.model_summary import ModelSummary
 from lightning import Callback, LightningDataModule, LightningModule, Trainer
 from lightning.pytorch.loggers import Logger
 from omegaconf import DictConfig
@@ -112,6 +114,7 @@ def main(cfg: DictConfig) -> Optional[float]:
     :param cfg: DictConfig configuration composed by Hydra.
     :return: Optional[float] with optimized metric value.
     """
+    os.chdir(cfg.paths.root_dir)
     # apply extra utilities
     # (e.g. ask for tags if none are provided in cfg, print cfg tree, etc.)
     extras(cfg)
