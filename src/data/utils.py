@@ -341,7 +341,6 @@ def vectorize_to_local(
 
                 # Idempotent skip if already vectorized
                 if os.path.exists(dst_x) and os.path.exists(dst_y):
-                    print(f"↪︎ Skipping existing {split_name}/{base}")
                     continue
 
                 print(f"→ Processing {path}")
@@ -383,31 +382,88 @@ def vectorize_to_local(
 # RESEEDING EVERY EPOCH
 # ============================================================
 def worker_init_fn(worker_id):
-    # seed everything based on global seed + epoch + worker id
     worker_info = torch.utils.data.get_worker_info()
-    dataset = worker_info.dataset  # the actual dataset copy
-    seed = torch.initial_seed() % 2**32
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
+    if worker_info is None:
+        return  # not running inside a DataLoader worker
+    # seed everything based on torch's worker-specific initial seed
+    worker_seed = torch.initial_seed() % 2**32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
 
 
 # ============================================================
 # CHECK IF ENOUGH FILES ARE PRESENT IN A TARGET DIRECTORY
 # ============================================================
-def has_enough_events(target: str, train_val_test_split_per_class, classnames, folder) -> bool:
+import os
+import json
+import math
+
+def has_enough_events(
+    target: str,
+    train_val_test_split_per_class,
+    classnames,
+    folder_map,
+    event_count_json_path="src/utils/nEvents_scan/file_event_counts.json",
+) -> bool:
+    """
+    Returns True only if all splits/classes meet required total events
+
+    Args:
+        target: Directory that contains train/val/test/{folder}/
+        train_val_test_split_per_class: e.g. [50_000, 20_000, 20_000]
+        classnames: list like ["QCD", "ggHbb"]
+        folder_map: mapping class_name -> folder name used in vectorized dir
+        event_count_json_path: path to JSON with event counts per parquet file
+    """
+
     if not target or not os.path.exists(target):
         return False
+
+    # Load event count database
+    if not os.path.exists(event_count_json_path):
+        raise FileNotFoundError(f"Missing event count file: {event_count_json_path}")
+
+    with open(event_count_json_path) as f:
+        event_db = json.load(f)
+
     split_names = ["train", "val", "test"]
-    # assume each _x.npy shard contains up to 10_000 events
-    events_per_file = 10000
+
     for split, needed_events in zip(split_names, train_val_test_split_per_class):
-        needed_files_per_class = math.ceil(needed_events / events_per_file)
         for cname in classnames:
-            split_folder = os.path.join(target, split, folder[cname])
-            if not os.path.exists(split_folder):
+            folder = folder_map[cname]         # e.g. "QCD_HT50toInf"
+            split_dir = os.path.join(target, split, folder)
+
+            if not os.path.isdir(split_dir):
                 return False
-            existing = [f for f in os.listdir(split_folder) if f.endswith("_x.npy")]
-            if len(existing) < needed_files_per_class:
+
+            # list files: *_x.npy
+            files = [f for f in os.listdir(split_dir) if f.endswith("_x.npy")]
+            if not files:
                 return False
+
+            # sum events using event_db
+            total_events = 0
+            for npy_name in files:
+                # convert e.g.
+                #   QCD_HT50toInf-NEVENT10000-RS26000001_x.npy
+                # → QCD_HT50toInf-NEVENT10000-RS26000001.parquet
+                parquet_name = npy_name.replace("_x.npy", ".parquet")
+
+                # event_db entry: event_db[folder][parquet_name]
+                if folder not in event_db:
+                    raise KeyError(f"Folder '{folder}' missing in event count DB")
+
+                if parquet_name not in event_db[folder]:
+                    raise KeyError(
+                        f"File '{parquet_name}' missing in event count DB for folder '{folder}'"
+                    )
+
+                total_events += event_db[folder][parquet_name]
+
+            # check whether this class meets its required events for this split
+            if total_events < needed_events:
+                # Not enough events for this class in this split
+                return False
+
+    # If all classes in all splits have enough events
     return True
