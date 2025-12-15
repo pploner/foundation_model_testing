@@ -10,14 +10,15 @@ rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 
 from src.data.utils import vectorize_to_local, get_all_cols
 
+"""
+Vectorize job script for vectorizing data based on a given manifest file.
+"""
 
 sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
 print("🟢 vectorize_job.py starting...", flush=True)
 
-# ---------------------------------------------------------------------
 # Parse manifest path before Hydra gets control
-# ---------------------------------------------------------------------
 parser = argparse.ArgumentParser()
 parser.add_argument("--manifest-path", type=str, required=True)
 args, _ = parser.parse_known_args()
@@ -25,7 +26,7 @@ args, _ = parser.parse_known_args()
 # Make manifest path absolute now (before Hydra may change cwd)
 args.manifest_path = os.path.abspath(args.manifest_path)
 
-# ⚠️ Prevent Hydra from seeing our CLI arguments
+# Prevent Hydra from seeing the CLI arguments
 sys.argv = [sys.argv[0]]
 
 @hydra.main(version_base="1.3", config_path="../../configs", config_name="train.yaml")

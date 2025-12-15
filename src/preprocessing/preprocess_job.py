@@ -10,6 +10,10 @@ rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 
 from src.preprocessing.preprocess import PreprocessingPipeline
 
+"""
+Preprocess job script for applying preprocessing to data based on a given manifest file.
+"""
+
 sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
 print("🟢 preprocess_job.py starting...", flush=True)
