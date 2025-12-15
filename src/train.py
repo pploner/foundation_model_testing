@@ -8,8 +8,20 @@ import os
 from lightning.pytorch.utilities.model_summary import ModelSummary
 from lightning import Callback, LightningDataModule, LightningModule, Trainer
 from lightning.pytorch.loggers import Logger
-from omegaconf import DictConfig
-
+import omegaconf
+import collections
+import typing
+import torch
+import functools
+# Allow safe unpickling of functools.partial from trusted checkpoints (else newer Pytorch versions fail to load them)
+torch.serialization.add_safe_globals([functools.partial,
+                                      torch.optim.AdamW,torch.optim.lr_scheduler.CosineAnnealingLR, torch.optim.lr_scheduler.ReduceLROnPlateau,
+                                      omegaconf.ListConfig, omegaconf.DictConfig, omegaconf.dictconfig.DictConfig,
+                                      omegaconf.nodes.AnyNode, omegaconf.base.Metadata, omegaconf.base.ContainerMetadata,
+                                      collections.defaultdict, typing.Any,
+                                      list, dict, int])
+# Set precision for float32 matrix multiplications to 'high' for better performance
+torch.set_float32_matmul_precision('high')
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 # ------------------------------------------------------------------------------------ #
 # the setup_root above is equivalent to:
@@ -42,7 +54,7 @@ log = RankedLogger(__name__, rank_zero_only=True)
 
 
 @task_wrapper
-def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+def train(cfg: omegaconf.DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """Trains the model. Can additionally evaluate on a testset, using best weights obtained during
     training.
 
@@ -92,12 +104,21 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
 
     if cfg.get("test"):
         log.info("Starting testing!")
-        ckpt_path = trainer.checkpoint_callback.best_model_path
-        if ckpt_path == "":
-            log.warning("Best ckpt not found! Using current weights for testing...")
-            ckpt_path = None
-        trainer.test(model=model, datamodule=datamodule, ckpt_path=ckpt_path)
-        log.info(f"Best ckpt path: {ckpt_path}")
+
+        # Case 1: User supplied an explicit checkpoint
+        if hasattr(cfg, "ckpt_path") and cfg.ckpt_path:
+            ckpt_path = cfg.ckpt_path
+            log.info(f"Using user-specified checkpoint for testing: {ckpt_path}")
+
+        else:
+            # Case 2: Use trainer's best checkpoint (only valid if training ran)
+            ckpt_path = trainer.checkpoint_callback.best_model_path
+            if not ckpt_path:
+                log.warning("No best checkpoint found! Using current model weights.")
+                ckpt_path = None
+
+    trainer.test(model=model, datamodule=datamodule, ckpt_path=ckpt_path)
+    log.info(f"Final ckpt used: {ckpt_path}")
 
     test_metrics = trainer.callback_metrics
 
@@ -108,7 +129,7 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
 
 
 @hydra.main(version_base="1.3", config_path="../configs", config_name="train.yaml")
-def main(cfg: DictConfig) -> Optional[float]:
+def main(cfg: omegaconf.DictConfig) -> Optional[float]:
     """Main entry point for training.
 
     :param cfg: DictConfig configuration composed by Hydra.
