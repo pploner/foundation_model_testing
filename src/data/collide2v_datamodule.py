@@ -26,7 +26,7 @@ class COLLIDE2VDataModule(LightningDataModule):
 
     The COLLIDE2V dataset is a dataset for training and evaluating particle collision models, simulated by a Madgraph Pythia Delphes chain.
     It is stored in columnar format in Parquet files, where the rows correspond to collision events and the columns represent the physics features of the particles involved in the collisions.
-    The dataset is organized in folders based on the process type and stored in shards of 10'000 simulated events each.
+    The dataset is organized in folders based on the process type and stored in shards of maximum 10'000 simulated events each.
 
     A `LightningDataModule` implements 7 key methods:
 
@@ -75,7 +75,6 @@ class COLLIDE2VDataModule(LightningDataModule):
         preprocess: Optional[Dict[str, Any]] = None,
         to_classify: Optional[Dict[str, str]] = None,
         process_to_folder: Optional[Dict[str, str]] = None,
-        seed: int = 42,
     ):
         """Initialize a `COLLIDE2VDataModule`."""
         super().__init__()
@@ -104,8 +103,6 @@ class COLLIDE2VDataModule(LightningDataModule):
         self.data_train: Optional[Dataset] = None
         self.data_val: Optional[Dataset] = None
         self.data_test: Optional[Dataset] = None
-
-        self.seed = seed
 
         self.batch_size_per_device = batch_size
 
@@ -161,7 +158,7 @@ class COLLIDE2VDataModule(LightningDataModule):
                 class_order=list(self.classnames),
             ).run()
 
-        # ✅ Load the new, expanded feature dimension from preprocessed norm_stats.json
+        # Load the new, expanded feature dimension from preprocessed norm_stats.json
         norm_stats_path = os.path.join(self.paths["eos_preproc_dir"], "norm_stats.json")
         if os.path.exists(norm_stats_path):
             with open(norm_stats_path) as f:
@@ -184,7 +181,7 @@ class COLLIDE2VDataModule(LightningDataModule):
 
         :param stage: The stage to setup. Either `"fit"`, `"validate"`, `"test"`, or `"predict"`. Defaults to ``None``.
         """
-        # Divide batch size by the number of devices.
+        # Divide batch size by the number of devices (NOT YET IMPLEMENTED HERE; GIVEN BATCH_SIZE IS ALREADY PER DEVICE).
         if self.trainer is not None:
             if self.hparams.batch_size % self.trainer.world_size != 0:
                 raise RuntimeError(
@@ -204,12 +201,13 @@ class COLLIDE2VDataModule(LightningDataModule):
             self.teststream = LocalVectorDataset(os.path.join(self.paths["eos_preproc_dir"], "test"), shuffle_file_order=False)
         else:
             raise RuntimeError(
-                f"❌ Preprocessed data not found in {self.paths['eos_preproc_dir']}.\n"
+                f"❌ Preprocessed data not found in {self.paths['eos_preproc_dir']} or not enough files present.\n"
                 f"Please run preprocessing first (set `preprocess.enabled=true` in your config) "
                 f"to generate normalized .npy files before training."
             )
 
         self.shuffled_train = ShuffleBuffer(self.trainstream, buffer_size=100000)
+        self.shuffled_val = ShuffleBuffer(self.valstream, buffer_size=100000)
 
     def train_dataloader(self) -> DataLoader[Any]:
         """Create and return the train dataloader.
@@ -230,7 +228,7 @@ class COLLIDE2VDataModule(LightningDataModule):
         :return: The validation dataloader.
         """
         return DataLoader(
-            dataset=self.valstream,
+            dataset=self.shuffled_val,
             batch_size=self.batch_size_per_device,
             num_workers=0,
             pin_memory=self.pin_memory,
