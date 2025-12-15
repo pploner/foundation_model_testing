@@ -19,12 +19,32 @@ cd ${PROJECT_DIR}
 # --- Sanity check: Python version ---
 apptainer exec ${IMAGE} python -V || true
 
+## Determine accelerator from full Hydra composition
+ACCELERATOR=$(python - << 'EOF'
+from hydra import initialize, compose
+
+with initialize(version_base="1.3", config_path="configs"):
+    cfg = compose(config_name="train.yaml")
+
+print(cfg.trainer.get("accelerator", "cpu"))
+EOF
+)
+
+# Pick Apptainer flags
+APPTAINER_FLAGS="--cleanenv --bind /afs:/afs --bind /eos:/eos --writable-tmpfs"
+
+if [ "$ACCELERATOR" = "gpu" ]; then
+    echo "[wrapper] GPU requested → enabling --nv"
+    APPTAINER_FLAGS="--nv $APPTAINER_FLAGS"
+else
+    echo "[wrapper] CPU mode → running without --nv"
+fi
+
 # --- Run training inside container ---
-apptainer exec --cleanenv \
-    --bind /afs:/afs \
-    --bind /eos:/eos \
-    --writable-tmpfs \
-    ${IMAGE} bash -lc "python src/train.py"
+echo "[wrapper] Running training with flags: $APPTAINER_FLAGS"
+
+apptainer exec $APPTAINER_FLAGS \
+    "${IMAGE}" bash -lc "python src/train.py"
 
 EXIT_CODE=$?
 
