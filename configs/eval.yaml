@@ -3,9 +3,10 @@
 defaults:
   - _self_
   - data: collide2v # choose datamodule with `test_dataloader()` for evaluation
-  - model: tinyMLP
-  - logger: null
-  - trainer: default
+  - preprocess: collide2v
+  - model: tinyTransformer
+  - logger: mlflow
+  - trainer: gpu
   - paths: fm_testing
   - extras: default
   - hydra: default
@@ -15,4 +16,4 @@ task_name: "eval"
 tags: ["dev"]
 
 # passing checkpoint path is necessary for evaluation
-ckpt_path: /eos/user/p/phploner/foundation_model_testing/logs/train/runs/2025-10-14_16-55-39/checkpoints/last.ckpt
+ckpt_path: /afs/cern.ch/work/p/phploner/foundation_model_testing/logs/train/runs/2025-12-03_12-03-45/checkpoints/last.ckpt

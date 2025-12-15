@@ -5,43 +5,21 @@
 
 defaults:
   - override /data: collide2v
-  - override /model: tinyMLP
   - override /callbacks: default
-  - override /trainer: default
+  - override /trainer: gpu
+  - override /model: tinyMLP
 
 # all parameters below will be merged with parameters from default configurations set above
 # this allows you to overwrite only specified parameters
 
-tags: ["collide2v", "tinyMLP"]
-
-seed: 42
-
-trainer:
-  min_epochs: 10
-  max_epochs: 10
-  gradient_clip_val: 0.5
-
-model:
-  hidden_dim: 256
-  lr: 1e-3
-  weight_decay: 1e-2
-  compile: false
-
-  optimizer:
-    _target_: torch.optim.AdamW
-    _partial_: true
-    lr: 1e-3
-    weight_decay: 1e-2
-
-  scheduler:
-    _target_: torch.optim.lr_scheduler.CosineAnnealingLR
-    _partial_: true
-    T_max: ${trainer.max_epochs}
+tags: ["collide2v", "tinyMLP", "new_shuffle_test"]
 
 data:
-  batch_size: 1024
-  train_val_test_split_per_class: [1_000_000, 20_000, 20_000]
-  num_workers: 0
-  pin_memory: False
+  train_val_test_split_per_class: [9_960_000, 20_000, 20_000]
+  label: "QCD_ggHbb_upscaled"
+  to_classify:
+    QCD: "QCD_inclusive"
+    ggHbb: "ggHbb"
 
-#logger:
+trainer:
+  max_epochs: 10
