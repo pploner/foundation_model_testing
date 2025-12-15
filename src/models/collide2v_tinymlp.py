@@ -106,6 +106,7 @@ class COLLIDE2VTinyMLPLitModule(LightningModule):
 
         :return: A tuple containing (in order):
             - A tensor of losses.
+            - A tensor of probabilities.
             - A tensor of predictions.
             - A tensor of target labels.
         """
