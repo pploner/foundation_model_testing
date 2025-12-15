@@ -1,6 +1,10 @@
 # src/preprocessing/preprocess.py
 
-import os, json, glob, shutil
+"""
+Main script implementing the preprocessing pipeline for already vectorized data.
+"""
+
+import os, json, glob, shutil, time
 from typing import Dict, List
 import numpy as np
 import torch
@@ -192,6 +196,18 @@ class PreprocessingPipeline:
 
     # ---------- helpers: IO & safety ----------
 
+    def _eos_isdir(self, path: str, retries: int = 10, delay: float = 0.2) -> bool:
+        """
+        EOS-hardened directory check.
+        Retries multiple times because EOS metadata lookups can fail transiently.
+        """
+        for i in range(retries):
+            if os.path.isdir(path):
+                return True
+            print(f"⚠️ EOS dir check failed for {path}, retrying {i+1}/{retries}...")
+            time.sleep(delay)
+        return False
+
     def _safety_check_existing_preprocessed(self):
         if not os.path.exists(self.fm_out):
             raise FileNotFoundError(
@@ -201,10 +217,8 @@ class PreprocessingPipeline:
             for cls in self.class_order:
                 cls_folder = self.proc2fold[cls]
                 d = os.path.join(self.paths["eos_preproc_dir"], split, cls_folder)
-                if not os.path.isdir(d):
-                    raise FileNotFoundError(
-                        f"Preprocessed folder missing: {d}. Re-run with preprocess.enabled=true."
-                    )
+                if not self._eos_isdir(d):
+                    raise FileNotFoundError(f"Preprocessed folder missing after retries: {d}")
         print("✅ Safety check passed: EOS preprocessed data present.")
 
     def _load_raw_npy(self, path: str) -> torch.Tensor:
