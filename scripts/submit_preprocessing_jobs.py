@@ -1,27 +1,19 @@
 #!/usr/bin/env python3
 """
-submit_vectorization_jobs.py
+submit_preprocessing_jobs.py
 
-Reads Hydra configs, builds a global split manifest, splits it into chunks of
-≤ MAX_FILES_PER_JOB, and directly submits each chunk to Condor to run
-`vectorize_to_local` inside the Apptainer container.
+Use this script to batch submit preprocessing jobs to Condor.
+
+Reads Hydra configs, creates stats file, splits it into chunks of ≤ MAX_FILES_PER_JOB,
+and directly submits each chunk to Condor to run `PreprocessingPipeline` inside the Apptainer container.
 """
 
-import os
 import json
 import subprocess
 from math import ceil
 from pathlib import Path
-import numpy as np
-import hydra
 from omegaconf import OmegaConf
-import sys
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
-from src.data.utils import load_global_filelist, make_split_manifest
 from src.preprocessing.preprocess import PreprocessingPipeline
 
 # -----------------------------------------------------------------------------
@@ -30,27 +22,21 @@ from src.preprocessing.preprocess import PreprocessingPipeline
 MAX_FILES_PER_JOB = 20
 JOB_FLAVOUR = "tomorrow"  # ~24h jobs
 
+
 PROJECT_DIR = Path("/afs/cern.ch/work/p/phploner/foundation_model_testing")
 WRAPPER_SCRIPT = PROJECT_DIR / "src/preprocessing/wrapper_preprocess.sh"
 LOG_DIR = PROJECT_DIR / "logs/condor_logs/preprocessing"
-LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 # -----------------------------------------------------------------------------
 # LOAD CONFIGS
 # -----------------------------------------------------------------------------
 print("🟢 Loading Hydra configs...")
 
-paths_cfg = OmegaConf.load(PROJECT_DIR / "configs/paths/fm_testing.yaml")
-data_cfg = OmegaConf.load(PROJECT_DIR / "configs/data/collide2v.yaml")
-pre_cfg = OmegaConf.load(PROJECT_DIR / "configs/preprocess/collide2v.yaml")
+train_cfg = OmegaConf.load(PROJECT_DIR / "configs/train.yaml")
 
-# Merge as train.yaml would do:
-merged_cfg = OmegaConf.merge({"paths": paths_cfg}, {"data": data_cfg}, {"preprocess": pre_cfg})
-
-paths_cfg = merged_cfg.paths
-data_cfg = merged_cfg.data
-pre_cfg = merged_cfg.preprocess
-
+paths_cfg = train_cfg.paths
+data_cfg = train_cfg.data
+pre_cfg = train_cfg.preprocess
 to_classify = data_cfg.to_classify              # {"QCD": "QCD inclusive", ...}
 folder_map_all = data_cfg.process_to_folder     # {"QCD inclusive": "QCD_HT50toInf", ...}
 
@@ -60,6 +46,8 @@ process_to_folder = {
     class_name: folder_map_all[proc_name]
     for class_name, proc_name in to_classify.items()
 }
+
+LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 # -----------------------------------------------------------------------------
 # Build PreprocessingPipeline (fit_only)
@@ -72,7 +60,7 @@ paths = {
     "eos_preproc_dir": data_cfg.paths.eos_preproc_dir,
 }
 
-# Force mode = fit_only without touching your config files
+# Force mode = fit_only without touching config files
 pre_cfg_local = OmegaConf.to_container(pre_cfg, resolve=True)
 pre_cfg_local["mode"] = "fit_only"
 pre_cfg_local["enabled"] = True
