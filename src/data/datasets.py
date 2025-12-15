@@ -1,14 +1,3 @@
-import os, random, numpy as np, torch
-from torch.utils.data import IterableDataset
-
-class LocalVectorDataset(IterableDataset):
-    """Stream samples from preprocessed .npy shards on EOS or local storage."""
-
-    def __init__(self, base_dir, per_class_limit=None):
-        super().__init__()
-        self.base_dir = base_dir
-        self.per_class_limit = per_class_limit
-
 import os
 import random
 import numpy as np
@@ -26,18 +15,6 @@ class LocalVectorDataset(IterableDataset):
         self.per_class_limit = per_class_limit
         self.shuffle = shuffle_file_order
 
-    def __iter__(self):
-        # --- Worker setup ---
-        worker_info = torch.utils.data.get_worker_info()
-        if worker_info is None:
-            worker_id, num_workers = 0, 1
-        else:
-            worker_id, num_workers = worker_info.id, worker_info.num_workers
-
-        # --- RNG per worker (shared seed across workers) ---
-        base_seed = torch.initial_seed() % 2**32
-        rng = random.Random(base_seed)
-
         # --- Collect all files from all class dirs ---
         class_dirs = [
             os.path.join(self.base_dir, folder)
@@ -51,15 +28,26 @@ class LocalVectorDataset(IterableDataset):
             for fx in files_x:
                 all_files.append((class_dir, fx))
 
+        self.all_files = all_files
+
         # --- Global shuffle across all class shards ---
         if self.shuffle:
-            rng.shuffle(all_files)
+            rng = random.Random()
+            rng.shuffle(self.all_files)
+
+    def __iter__(self):
+        # --- Worker setup ---
+        worker_info = torch.utils.data.get_worker_info()
+        if worker_info is None:
+            worker_id, num_workers = 0, 1
+        else:
+            worker_id, num_workers = worker_info.id, worker_info.num_workers
 
         # --- Split non-overlapping chunks for each worker ---
-        per_worker = int(math.ceil(len(all_files) / float(num_workers)))
+        per_worker = int(math.ceil(len(self.all_files) / float(num_workers)))
         start = worker_id * per_worker
-        end = min(start + per_worker, len(all_files))
-        my_files = all_files[start:end]
+        end = min(start + per_worker, len(self.all_files))
+        my_files = self.all_files[start:end]
 
         counters = {}
 
