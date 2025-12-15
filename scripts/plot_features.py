@@ -7,6 +7,12 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
+"""
+Script to plot feature histograms per process from vectorized or preprocessed data.
+Usage:
+    python scripts/plot_features.py --base_dir path/to/vectorized_or_preprocessed --output_dir path/to/save/plots --split train --max_files 5
+"""
+
 from src.utils.plotting import plot_all_processes
 
 if __name__ == "__main__":
