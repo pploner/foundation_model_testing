@@ -22,6 +22,8 @@ awkward
 pandas
 matplotlib
 ipykernel
+plotly
+nbformat
 sqlalchemy<2.0  # avoid v2 due to incompatibility with optuna
 
 # --------- others --------- #
