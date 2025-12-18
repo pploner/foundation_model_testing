@@ -10,7 +10,7 @@ compile: false
 optimizer:
   _target_: torch.optim.AdamW
   _partial_: true
-  lr: 3e-4
+  lr: 2e-4
   weight_decay: 1e-2
 
 scheduler:

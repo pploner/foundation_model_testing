@@ -16,7 +16,7 @@ defaults:
 
   # experiment configs allow for version control of specific hyperparameters
   # e.g. best hyperparameters for given model and datamodule
-  - experiment: fm_testing_debug_transformer
+  - experiment: fm_testing
 
   # config for hyperparameter optimization
   - hparams_search: collide2v_optuna
