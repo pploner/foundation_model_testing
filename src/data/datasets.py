@@ -3,27 +3,42 @@ import random
 import numpy as np
 import torch
 import math
+import json
 from torch.utils.data import IterableDataset
 
 
 class LocalVectorDataset(IterableDataset):
     """Stream samples from preprocessed .npy shards on EOS or local storage."""
 
-    def __init__(self, base_dir, per_class_limit=None, shuffle_file_order=True):
+    def __init__(self, base_dir, per_class_limit=None, shuffle_file_order=True, classnames=None, folder_map=None):
         super().__init__()
         self.base_dir = base_dir
         self.per_class_limit = per_class_limit
         self.shuffle = shuffle_file_order
 
-        # --- Collect all files from all class dirs ---
-        class_dirs = [
-            os.path.join(self.base_dir, folder)
-            for folder in os.listdir(self.base_dir)
-            if os.path.isdir(os.path.join(self.base_dir, folder))
-        ]
+        # Either find all class directories or use provided class names and folder map
+        if classnames is None:
+            class_dirs = [
+                os.path.join(self.base_dir, folder)
+                for folder in os.listdir(self.base_dir)
+                if os.path.isdir(os.path.join(self.base_dir, folder))
+            ]
+        else:
+            folder_names = []
+            for cname in classnames:
+                if folder_map and cname in folder_map:
+                    folder_names.append(folder_map[cname])
+                else:
+                    raise ValueError(f"Class name {cname} not found in folder_map.")
+            class_dirs = [os.path.join(self.base_dir, d) for d in folder_names]
+            for d in class_dirs:
+                if not os.path.isdir(d):
+                    raise ValueError(f"Provided folder name {d} is not a directory in base_dir {self.base_dir}")
+
+        self.class_dirs = class_dirs
 
         all_files = []
-        for class_dir in class_dirs:
+        for class_dir in self.class_dirs:
             files_x = [f for f in os.listdir(class_dir) if f.endswith("_x.npy")]
             for fx in files_x:
                 all_files.append((class_dir, fx))
@@ -51,6 +66,11 @@ class LocalVectorDataset(IterableDataset):
 
         counters = {}
 
+        if self.per_class_limit is not None:
+            worker_class_limit = int(math.ceil(self.per_class_limit / float(num_workers)))
+        else:
+            worker_class_limit = None
+
         # --- Iterate files ---
         for class_dir, fx in my_files:
             cname = os.path.basename(class_dir)
@@ -62,7 +82,7 @@ class LocalVectorDataset(IterableDataset):
 
             n = len(y)
             counters.setdefault(cname, 0)
-            remain = None if self.per_class_limit is None else self.per_class_limit - counters[cname]
+            remain = None if worker_class_limit is None else worker_class_limit - counters[cname]
             if remain is not None and remain <= 0:
                 continue
 

@@ -196,9 +196,15 @@ class COLLIDE2VDataModule(LightningDataModule):
             self.folder,
         ):
             print(f"🟡 Preprocessed data found — using from {self.paths['eos_preproc_dir']}")
-            self.trainstream = LocalVectorDataset(os.path.join(self.paths["eos_preproc_dir"], "train"), shuffle_file_order=True)
-            self.valstream = LocalVectorDataset(os.path.join(self.paths["eos_preproc_dir"], "val"), shuffle_file_order=False)
-            self.teststream = LocalVectorDataset(os.path.join(self.paths["eos_preproc_dir"], "test"), shuffle_file_order=False)
+            self.trainstream = LocalVectorDataset(os.path.join(self.paths["eos_preproc_dir"], "train"),
+                                                  per_class_limit=self.train_val_test_split_per_class[0],
+                                                  shuffle_file_order=True, classnames=self.classnames, folder_map=self.folder)
+            self.valstream = LocalVectorDataset(os.path.join(self.paths["eos_preproc_dir"], "val"),
+                                                per_class_limit=self.train_val_test_split_per_class[1],
+                                                shuffle_file_order=False, classnames=self.classnames, folder_map=self.folder)
+            self.teststream = LocalVectorDataset(os.path.join(self.paths["eos_preproc_dir"], "test"),
+                                                 per_class_limit=self.train_val_test_split_per_class[2],
+                                                 shuffle_file_order=False, classnames=self.classnames, folder_map=self.folder)
         else:
             raise RuntimeError(
                 f"❌ Preprocessed data not found in {self.paths['eos_preproc_dir']} or not enough files present.\n"
