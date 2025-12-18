@@ -24,7 +24,7 @@ matplotlib
 ipykernel
 plotly
 nbformat
-sqlalchemy<2.0  # avoid v2 due to incompatibility with optuna
+sqlalchemy<3.0  # avoid v2 due to incompatibility with optuna
 
 # --------- others --------- #
 rootutils       # standardizing the project root setup
