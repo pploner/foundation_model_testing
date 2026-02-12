@@ -70,7 +70,7 @@ def scan_dataset(base_dir: str, process_to_folder: dict, output_json: str, n_wor
 
 if __name__ == "__main__":
     # --- Load your Hydra data config ---
-    cfg = OmegaConf.load("configs/data/collide2v.yaml")
+    cfg = OmegaConf.load("configs/data/collide2v_basic.yaml")
 
     # Base directory of all Parquet folders
     base_dir = cfg.get("base_dir", "/eos/project/f/foundational-model-dataset/samples/production_final")
@@ -79,6 +79,6 @@ if __name__ == "__main__":
     process_to_folder = cfg["process_to_folder"]
 
     # Output file (you can change to EOS path if preferred)
-    output_json = "file_event_counts.json"
+    output_json = "src/utils/nEvents_scan/file_event_counts.json"
 
     scan_dataset(base_dir, process_to_folder, output_json, n_workers=16)
