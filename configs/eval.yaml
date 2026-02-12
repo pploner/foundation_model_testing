@@ -2,14 +2,18 @@
 
 defaults:
   - _self_
-  - data: collide2v # choose datamodule with `test_dataloader()` for evaluation
+  - data: collide2v_basic # choose datamodule with `test_dataloader()` for evaluation
   - preprocess: collide2v
   - model: tinyTransformer
+  - callbacks: default
   - logger: mlflow
   - trainer: gpu
   - paths: fm_testing
   - extras: default
   - hydra: default
+
+  # choose experiment config with matching data and preprocessing settings to trained model
+  - experiment: fm_testing_18class_highlevel
 
 task_name: "eval"
 

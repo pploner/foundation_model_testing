@@ -20,6 +20,8 @@ feature_transforms:
   isolation: identity
   count: identity
   displacement: identity
+  ncharged: identity
+  nneutrals: identity
   other: identity
 
 # Normalization methods: none, minmax, robust, standard
@@ -40,4 +42,6 @@ feature_normalizations:
   isolation: robust
   count: minmax
   displacement: robust
+  ncharged: robust
+  nneutrals: robust
   other: robust

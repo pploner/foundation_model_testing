@@ -1,0 +1,61 @@
+# @package _global_
+
+# to execute this experiment run:
+# python train.py experiment=fm_testing
+
+defaults:
+  - override /data: collide2v_emptyDatasetConfig
+  - override /callbacks: default
+  - override /trainer: gpu
+
+# all parameters below will be merged with parameters from default configurations set above
+# this allows you to overwrite only specified parameters
+
+tags: ["collide2v", "tinyTransformer", "version2_onlyParticles"]
+
+data:
+  train_val_test_split_per_class: [4_960_000, 20_000, 20_000]
+  label: "v2_QCD_ggHbb_upscaled_onlyParticles"
+  to_classify:
+    QCD: "QCD_inclusive"
+    ggHbb: "ggHbb"
+  datasets_config:
+    particles:
+      cols:
+        - FullReco_PUPPIPart_PT
+        - FullReco_PUPPIPart_Eta
+        - FullReco_PUPPIPart_Phi
+        - FullReco_PUPPIPart_Charge
+        - FullReco_PUPPIPart_Mass
+        - FullReco_PUPPIPart_PID
+        - FullReco_PUPPIPart_PuppiW
+        - FullReco_PUPPIPart_D0
+        - FullReco_PUPPIPart_DZ
+      topk: 20
+      count: true
+
+trainer:
+  min_epochs: 1
+  max_epochs: 1000
+
+callbacks:
+  early_stopping:
+    monitor: "val/acc"
+    min_delta: 0.0001
+    patience: 10
+
+model:
+  scheduler:
+    _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
+    _partial_: true
+    patience: 2
+    factor: 0.5
+    min_lr: 1e-06
+
+preprocess:
+  enabled: true
+
+logger:
+  mlflow:
+    run_name: "Optimized_upscaled_v2_onlyParticles"
+    experiment_name: "hyperparameter_search"

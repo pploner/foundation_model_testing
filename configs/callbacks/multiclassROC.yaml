@@ -1,0 +1,2 @@
+multiclassROC:
+  _target_: src.callbacks.multiclassROC.MCROC

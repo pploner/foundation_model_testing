@@ -1,0 +1,106 @@
+_target_: src.data.collide2v_datamodule.COLLIDE2VDataModule
+batch_size: 1024 # Needs to be divisible by the number of devices (e.g., if in a distributed setup)
+train_val_test_split_per_class: [9_960_000, 20_000, 20_000]
+num_workers: 4
+pin_memory: true
+
+preprocess: ${preprocess}
+
+
+# IMPORTANT: IF YOU CHANGE THE SPLITS OR ANY DATASET CONFIG, CHOOSE A NEW LABEL OR DELETE DATA FOR EXISTING LABELS TO AVOID CONFLICTS!
+label: "QCD_ggHbb_upscaled"  # label to be used for folder name of vectorized and preprocessed data
+
+paths:
+  tmp_vec_dir: ${paths.tmp_data_dir}/${data.label}/vectorized/
+  tmp_preproc_dir: ${paths.tmp_data_dir}/${data.label}/preprocessed/
+  eos_vec_dir: ${paths.eos_data_dir}/${data.label}/vectorized/
+  eos_preproc_dir: ${paths.eos_data_dir}/${data.label}/preprocessed/
+  dataset_dir: ${paths.dataset_dir}
+
+# SPECIFY HERE WHICH COLUMNS OF THE DATASET TO TAKE FOR THE TRAINING
+# The columns are given in groups (e.g. particles, jets etc.)
+# cols: are the specific columns to be read
+# topk: are the amount of objects to be taken from the columns, they are sorted in descending order w.r.t. the first col
+# e.g. "particles": {
+#       "cols": [
+#           "FullReco_PUPPIPart_PT",
+#           "FullReco_PUPPIPart_Eta",
+#           "FullReco_PUPPIPart_Phi",
+#       ]
+#       "topk": 20,
+# takes the 20 particles with the highest PT (first col) and sorts them from highest to lowest
+# topk = 1 means only the highest object w.r.t the first column is taken
+# topk = None is used for scalar values where no ordering/selecting needs to be done (e.g. MET)
+# count: is a bool that specifies if an additional column should be made with the total number of objects (e.g. # of particles)
+
+datasets_config:
+
+
+# SPECIFY HERE WHICH PROCESSES TO USE FOR THE CLASSIFIER TRAINING
+# The keys are labels used in the training
+# The values are the exact process names as in the list below
+
+# To_classify is a list of process names, all available names are in the process_to_folder mapping below
+
+to_classify:
+
+
+# The mappings from processes to respective COLLIDE2V folders:
+process_to_folder:
+  "DY_to_ll": "DYJetsToLL_13TeV-madgraphMLM-pythia8"
+  "Z_to_vv_jet": "ZJetsTovv_13TeV-madgraphMLM-pythia8"
+  "Z_to_qq_uds": "ZJetsToQQ_13TeV-madgraphMLM-pythia8"
+  "Z_to_bb": "ZJetsTobb_13TeV-madgraphMLM-pythia8"
+  "Z_to_cc": "ZJetsTocc_13TeV-madgraphMLM-pythia8"
+  "W_to_lv": "WJetsToLNu_13TeV-madgraphMLM-pythia8"
+  "W_to_qq": "WJetsToQQ_13TeV-madgraphMLM-pythia8"
+  "gamma": "gamma"
+  "gamma_V": "gamma_V"
+  "tri_gamma": "tri_gamma"
+  # QCD
+  "QCD_inclusive": "QCD_HT50toInf"
+  "QCD_bb": "QCD_HT50tobb"
+  "Minbias_Soft_QCD": "minbias"
+  # top
+  "tt_all-hadr": "tt0123j_5f_ckm_LO_MLM_hadronic"
+  "tt_semi-lept": "tt0123j_5f_ckm_LO_MLM_semiLeptonic"
+  "tt_all-lept": "tt0123j_5f_ckm_LO_MLM_leptonic"
+  "ttH_incl": "ttH_incl"
+  "tttt": "tttt_incl"
+  "ttW_incl": "ttW_incl"
+  "ttZ_incl": "ttZ_incl"
+  # dibosons
+  "WW_all-lept": "WW_leptonic"
+  "WW_all-hadr": "WW_hadronic"
+  "WW_semi-lept": "WW_semileptonic"
+  "WZ_all-lept": "WZ_leptonic"
+  "WZ_all-hadr": "WZ_hadronic"
+  "WZ_semi-lept": "WZ_semileptonic"
+  "ZZ_all-lept": "ZZ_leptonic"
+  "ZZ_all-hadr": "ZZ_hadronic"
+  "ZZ_semi-lept": "ZZ_semileptonic"
+  "VVV": "VVV_incl"
+  "VH_incl": "VH_incl"
+  # single-Higgs
+  "ggHbb": "ggHbb"
+  "ggHcc": "ggHcc"
+  "ggHgammagamma": "ggHgammagamma"
+  "ggHgluglu": "ggHgluglu"
+  "ggHtautau": "ggHtautau"
+  "ggHWW": "ggHWW"
+  "ggHZZ": "ggHZZ"
+  "VBFHbb": "VBFHbb"
+  "VBFHcc": "VBFHcc"
+  "VBFHgammagamma": "VBFHgammagamma"
+  "VBFHgluglu": "VBFHgluglu"
+  "VBFHtautau": "VBFHtautau"
+  "VBFHWW": "VBFHWW"
+  "VBFHZZ": "VBFHZZ"
+  # di-HiggS
+  "HH_4b": "HH_4b"
+  "HH_bbtautau": "HH_bbtautau"
+  "HH_bbWW": "HH_bbWW"
+  "HH_bbZZ": "HH_bbZZ"
+  "HH_bbgammagamma": "HH_bbgammagamma"
+  # other
+  "Upsilon_to_Leptons": "upsilon_to_leptons"

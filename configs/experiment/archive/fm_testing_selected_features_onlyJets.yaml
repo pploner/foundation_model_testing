@@ -4,21 +4,32 @@
 # python train.py experiment=fm_testing
 
 defaults:
-  - override /data: collide2v
+  - override /data: collide2v_emptyDatasetConfig
   - override /callbacks: default
   - override /trainer: gpu
 
 # all parameters below will be merged with parameters from default configurations set above
 # this allows you to overwrite only specified parameters
 
-tags: ["collide2v", "tinyTransformer", "ReduceLROnPlateau", "optimizer_sweep"]
+tags: ["collide2v", "tinyTransformer", "version2_onlyJets"]
 
 data:
-  train_val_test_split_per_class: [1_000_000, 20_000, 20_000]
-  label: "QCD_ggHbb_upscaled"
+  train_val_test_split_per_class: [4_960_000, 20_000, 20_000]
+  label: "v2_QCD_ggHbb_upscaled_onlyJets"
   to_classify:
     QCD: "QCD_inclusive"
     ggHbb: "ggHbb"
+  datasets_config:
+    jets:
+      cols:
+        - FullReco_JetPuppiAK4_PT
+        - FullReco_JetPuppiAK4_Eta
+        - FullReco_JetPuppiAK4_Phi
+        - FullReco_JetPuppiAK4_Mass
+        - FullReco_JetPuppiAK4_BTag
+        - FullReco_JetPuppiAK4_Charge
+      topk: 5
+      count: true
 
 trainer:
   min_epochs: 1
@@ -27,7 +38,7 @@ trainer:
 callbacks:
   early_stopping:
     monitor: "val/acc"
-    min_delta: 0.001
+    min_delta: 0.0001
     patience: 10
 
 model:
@@ -43,4 +54,5 @@ preprocess:
 
 logger:
   mlflow:
-    run_name: "Capacity_sweep"
+    run_name: "Optimized_upscaled_v2_onlyJets"
+    experiment_name: "hyperparameter_search"

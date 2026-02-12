@@ -4,6 +4,7 @@ defaults:
   - model_summary
   - rich_progress_bar
   - lr_monitor
+  - multiclassROC
   - _self_
 
 model_checkpoint:
