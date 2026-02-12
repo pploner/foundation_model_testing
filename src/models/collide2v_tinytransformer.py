@@ -191,6 +191,8 @@ class COLLIDE2VTransformerLitModule(LightningModule):
 
         self.val_roc.reset()
 
+        return {"probs": probs}
+
     def on_validation_epoch_end(self) -> None:
         "Lightning hook that is called when a validation epoch ends."
         # Compute metrics only if AUROC has received any samples
@@ -227,6 +229,8 @@ class COLLIDE2VTransformerLitModule(LightningModule):
         self.test_acc(preds, targets)
         self.log("test/loss", self.test_loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log("test/acc", self.test_acc, on_step=False, on_epoch=True, prog_bar=True)
+
+        return {"probs": probs}
 
     def on_test_epoch_end(self) -> None:
         """Lightning hook that is called when a test epoch ends."""
