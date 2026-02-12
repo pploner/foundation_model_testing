@@ -1,5 +1,5 @@
 import os
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, List
 
 import json
 from lightning import LightningDataModule
@@ -73,7 +73,7 @@ class COLLIDE2VDataModule(LightningDataModule):
         paths: Optional[Dict[str, str]] = None,
         datasets_config: Optional[Dict[str, Any]] = None,
         preprocess: Optional[Dict[str, Any]] = None,
-        to_classify: Optional[Dict[str, str]] = None,
+        to_classify: Optional[List[str]] = None,
         process_to_folder: Optional[Dict[str, str]] = None,
     ):
         """Initialize a `COLLIDE2VDataModule`."""
@@ -90,14 +90,12 @@ class COLLIDE2VDataModule(LightningDataModule):
         self.paths = paths or {}
         self.datasets_config = datasets_config or {}
         self.preprocess_cfg = preprocess or {}
-        self.to_classify = to_classify or {}
         self.process_to_folder = process_to_folder or {}
 
         self.vlen = compute_vlen(self.datasets_config)
 
-        self.classnames = list(self.to_classify.keys())
-        self.pretty = {c: self.to_classify[c] for c in self.classnames}
-        self.folder = {c: self.process_to_folder[self.pretty[c]] for c in self.classnames}
+        self.classnames = to_classify or []
+        self.folder = {c: self.process_to_folder[c] for c in self.classnames}
         self.labels = {c: i for i, c in enumerate(self.classnames)}
 
         self.data_train: Optional[Dataset] = None
@@ -144,7 +142,7 @@ class COLLIDE2VDataModule(LightningDataModule):
                 preprocess_cfg=self.preprocess_cfg,  # contains feature_transforms, feature_normalizations,
                 process_to_folder=self.folder,       # your process_to_folder mapping
                 class_order=list(self.classnames),   # e.g. ["QCD", "ggHbb"]
-                device="cpu",                        # "cuda" works too for speed
+                device="cpu",
             )
             pipeline.run()
         else:
@@ -182,12 +180,12 @@ class COLLIDE2VDataModule(LightningDataModule):
         :param stage: The stage to setup. Either `"fit"`, `"validate"`, `"test"`, or `"predict"`. Defaults to ``None``.
         """
         # Divide batch size by the number of devices (NOT YET IMPLEMENTED HERE; GIVEN BATCH_SIZE IS ALREADY PER DEVICE).
-        if self.trainer is not None:
-            if self.hparams.batch_size % self.trainer.world_size != 0:
-                raise RuntimeError(
-                    f"Batch size ({self.hparams.batch_size}) is not divisible by the number of devices ({self.trainer.world_size})."
-                )
-            self.batch_size_per_device = self.hparams.batch_size // self.trainer.world_size
+      #  if self.trainer is not None:
+      #      if self.hparams.batch_size % self.trainer.world_size != 0:
+      #          raise RuntimeError(
+      #              f"Batch size ({self.hparams.batch_size}) is not divisible by the number of devices ({self.trainer.world_size})."
+      #          )
+      #      self.batch_size_per_device = self.hparams.batch_size // self.trainer.world_size
 
         if has_enough_events(
             self.paths["eos_preproc_dir"],
@@ -226,6 +224,7 @@ class COLLIDE2VDataModule(LightningDataModule):
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
             worker_init_fn=worker_init_fn,
+            shuffle=False
         )
 
     def val_dataloader(self) -> DataLoader[Any]:
@@ -239,6 +238,7 @@ class COLLIDE2VDataModule(LightningDataModule):
             num_workers=0,
             pin_memory=self.pin_memory,
             worker_init_fn=worker_init_fn,
+            shuffle=False
         )
 
     def test_dataloader(self) -> DataLoader[Any]:
@@ -252,6 +252,7 @@ class COLLIDE2VDataModule(LightningDataModule):
             num_workers=0,
             pin_memory=self.pin_memory,
             worker_init_fn=worker_init_fn,
+            shuffle=False
         )
 
     def teardown(self, stage: Optional[str] = None) -> None:

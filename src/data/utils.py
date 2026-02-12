@@ -234,6 +234,7 @@ def make_split_manifest(global_filelist, split_counts, include_folders, seed=42)
 
             # move to next split once target reached (allow overshoot by one file)
             if acc >= targets_abs[split_idx]:
+                print(f"Folder {folder} added enough files (n={acc}) to split {split_names[split_idx]}")
                 split_idx += 1
                 acc = 0
 
@@ -263,6 +264,7 @@ def vectorize_to_local(
     split_counts: list,  # [train, val, test]
     read_batch_size: int = 512,
     split_manifest: dict | None = None,
+    parallel_processing: bool = False,
 ):
     """Vectorize Parquet shards using a deterministic split manifest.
 
@@ -331,7 +333,12 @@ def vectorize_to_local(
                 path = os.path.join(folder, fname)
                 base = os.path.splitext(fname)[0]
 
-                tmp_split_dir = os.path.join(tmp_vec_dir, split_name, class_folder)
+                if parallel_processing:
+                    scratch = os.environ.get("TMPDIR", "/tmp")
+                    tmp_split_dir = os.path.join(scratch, split_name, class_folder)
+                else:
+                    tmp_split_dir = os.path.join(tmp_vec_dir, split_name, class_folder)
+
                 eos_split_dir = os.path.join(eos_vec_dir, split_name, class_folder)
                 os.makedirs(tmp_split_dir, exist_ok=True)
                 os.makedirs(eos_split_dir, exist_ok=True)
@@ -372,6 +379,9 @@ def vectorize_to_local(
 
                 move_to_eos(local_x, dst_x)
                 move_to_eos(local_y, dst_y)
+
+                os.remove(local_x) if os.path.exists(local_x) else None
+                os.remove(local_y) if os.path.exists(local_y) else None
 
                 print(f"✅ Saved {split_name}/{base}: {feats_cat.shape}")
 
@@ -434,11 +444,13 @@ def has_enough_events(
             split_dir = os.path.join(target, split, folder)
 
             if not os.path.isdir(split_dir):
+                print(f"split_dir '{split_dir}' does not exist.")
                 return False
 
             # list files: *_x.npy
             files = [f for f in os.listdir(split_dir) if f.endswith("_x.npy")]
             if not files:
+                print(f"No files ending in _x.npy found in '{split_dir}'.")
                 return False
 
             # sum events using event_db
@@ -463,7 +475,10 @@ def has_enough_events(
             # check whether this class meets its required events for this split
             if total_events < needed_events:
                 # Not enough events for this class in this split
+                print(f"Total events found ({total_events}) are less than required events ({needed_events}) for class {cname}.")
                 return False
+            else:
+                print(f"Class {cname} had enough events ({total_events} events, required: {needed_events} events).")
 
     # If all classes in all splits have enough events
     return True
