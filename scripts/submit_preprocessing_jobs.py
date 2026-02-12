@@ -8,101 +8,124 @@ Reads Hydra configs, creates stats file, splits it into chunks of ≤ MAX_FILES_
 and directly submits each chunk to Condor to run `PreprocessingPipeline` inside the Apptainer container.
 """
 
+import rootutils
+rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 import json
 import subprocess
+import hydra
 from math import ceil
 from pathlib import Path
-from omegaconf import OmegaConf
+from omegaconf import DictConfig, OmegaConf
 
 from src.preprocessing.preprocess import PreprocessingPipeline
 
 # -----------------------------------------------------------------------------
 # CONFIG
 # -----------------------------------------------------------------------------
-MAX_FILES_PER_JOB = 20
+MAX_FILES_PER_JOB = 50
 JOB_FLAVOUR = "tomorrow"  # ~24h jobs
 
 
-PROJECT_DIR = Path("/afs/cern.ch/work/p/phploner/foundation_model_testing")
+PROJECT_DIR = Path(__file__).resolve().parents[1]
 WRAPPER_SCRIPT = PROJECT_DIR / "src/preprocessing/wrapper_preprocess.sh"
 LOG_DIR = PROJECT_DIR / "logs/condor_logs/preprocessing"
 
 # -----------------------------------------------------------------------------
-# LOAD CONFIGS
+# MAIN
 # -----------------------------------------------------------------------------
-print("🟢 Loading Hydra configs...")
-
-train_cfg = OmegaConf.load(PROJECT_DIR / "configs/train.yaml")
-
-paths_cfg = train_cfg.paths
-data_cfg = train_cfg.data
-pre_cfg = train_cfg.preprocess
-to_classify = data_cfg.to_classify              # {"QCD": "QCD inclusive", ...}
-folder_map_all = data_cfg.process_to_folder     # {"QCD inclusive": "QCD_HT50toInf", ...}
-
-class_order = list(to_classify.keys())
-
-process_to_folder = {
-    class_name: folder_map_all[proc_name]
-    for class_name, proc_name in to_classify.items()
-}
-
-LOG_DIR.mkdir(parents=True, exist_ok=True)
-
-# -----------------------------------------------------------------------------
-# Build PreprocessingPipeline (fit_only)
-# -----------------------------------------------------------------------------
-print("🟡 Preparing preprocessing pipeline (fit_only)...")
-
-paths = {
-    "eos_vec_dir": data_cfg.paths.eos_vec_dir,
-    "tmp_preproc_dir": data_cfg.paths.tmp_preproc_dir,
-    "eos_preproc_dir": data_cfg.paths.eos_preproc_dir,
-}
-
-# Force mode = fit_only without touching config files
-pre_cfg_local = OmegaConf.to_container(pre_cfg, resolve=True)
-pre_cfg_local["mode"] = "fit_only"
-pre_cfg_local["enabled"] = True
-pre_cfg_local = OmegaConf.create(pre_cfg_local)
-
-pipeline = PreprocessingPipeline(
-    paths=paths,
-    preprocess_cfg=pre_cfg_local,
-    process_to_folder=process_to_folder,
-    class_order=class_order,
-    device="cpu",
+@hydra.main(
+    config_path="../configs",
+    config_name="vectorize_preprocess.yaml",
+    version_base="1.3",
 )
+def main(cfg: DictConfig):
 
-pipeline.run()
+    print("🟢 Hydra config composed successfully")
+    # -----------------------------------------------------------------------------
+    # LOAD CONFIGS
+    # -----------------------------------------------------------------------------
+    print("🟢 Loading Hydra configs...")
 
-stats_path = Path(paths["eos_preproc_dir"]) / "norm_stats.json"
-if not stats_path.exists():
-    raise RuntimeError(f"❌ norm_stats.json missing after fit_only: {stats_path}")
+    paths_cfg = cfg.paths
+    data_cfg = cfg.data
+    pre_cfg = cfg.preprocess
+    class_order = data_cfg.to_classify              # {"QCD": "QCD inclusive", ...}
+    process_to_folder = data_cfg.process_to_folder     # {"QCD inclusive": "QCD_HT50toInf", ...}
 
-print(f"✅ Fitted normalization stats → {stats_path}")
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-# -----------------------------------------------------------------------------
-# SCAN VECTORIZED FILES
-# -----------------------------------------------------------------------------
-print("\n🟢 Scanning vectorized files...")
+    # -----------------------------------------------------------------------------
+    # Build PreprocessingPipeline (fit_only)
+    # -----------------------------------------------------------------------------
+    print("🟡 Preparing preprocessing pipeline (fit_only)...")
 
-entries = []  # list of (folder, split, filename)
+    paths = {
+        "eos_vec_dir": data_cfg.paths.eos_vec_dir,
+        "tmp_preproc_dir": data_cfg.paths.tmp_preproc_dir,
+        "eos_preproc_dir": data_cfg.paths.eos_preproc_dir,
+    }
 
-for split in ("train", "val", "test"):
-    for cls in class_order:
-        cls_folder = process_to_folder[cls]
-        vec_dir = Path(paths["eos_vec_dir"]) / split / cls_folder
+    stats_path = Path(paths["eos_preproc_dir"]) / "norm_stats.json"
 
-        npy_files = list(vec_dir.glob("*_x.npy"))
-        for f in npy_files:
-            entries.append((cls_folder, split, f.name))
+    if not stats_path.exists():
+        print("ℹ️ norm_stats.json not found, will fit normalization stats...")
+        # Force mode = fit_only without touching config files
+        pre_cfg_local = OmegaConf.to_container(pre_cfg, resolve=True)
+        pre_cfg_local["mode"] = "fit_only"
+        pre_cfg_local["enabled"] = True
+        pre_cfg_local = OmegaConf.create(pre_cfg_local)
 
-num_files = len(entries)
-n_jobs = ceil(num_files / MAX_FILES_PER_JOB)
+        pipeline = PreprocessingPipeline(
+            paths=paths,
+            preprocess_cfg=pre_cfg_local,
+            process_to_folder=process_to_folder,
+            class_order=class_order,
+            device="cpu",
+        )
 
-print(f"🟡 Found {num_files} vectorized files → {n_jobs} jobs (≤{MAX_FILES_PER_JOB}/job)")
+        pipeline.run()
+    else:
+        print("ℹ️ norm_stats.json found, skipping fitting step.")
 
+    if not stats_path.exists():
+        raise RuntimeError(f"❌ norm_stats.json missing after fit_only: {stats_path}")
+
+    print(f"✅ Fitted normalization stats → {stats_path}")
+
+    # -----------------------------------------------------------------------------
+    # SCAN VECTORIZED FILES
+    # -----------------------------------------------------------------------------
+    print("\n🟢 Scanning vectorized files...")
+
+    entries = []  # list of (folder, split, filename)
+
+    for split in ("train", "val", "test"):
+        for cls in class_order:
+            cls_folder = process_to_folder[cls]
+            vec_dir = Path(paths["eos_vec_dir"]) / split / cls_folder
+            pre_dir = Path(paths["eos_preproc_dir"]) / split / cls_folder
+            npy_files = list(vec_dir.glob("*_x.npy"))
+            target_npy_files = list(pre_dir.glob("*_x.npy"))
+            target_npy_file_names = {f.name for f in target_npy_files}
+            for f in npy_files:
+                if f.name not in target_npy_file_names:
+                    entries.append((cls_folder, split, f.name))
+
+    num_files = len(entries)
+    n_jobs = ceil(num_files / MAX_FILES_PER_JOB)
+
+    print(f"🟡 Found {num_files} vectorized files → {n_jobs} jobs (≤{MAX_FILES_PER_JOB}/job)")
+
+    # -----------------------------------------------------------------------------
+    # SUBMIT ALL JOBS
+    # -----------------------------------------------------------------------------
+    for i in range(n_jobs):
+        start = i * MAX_FILES_PER_JOB
+        end = start + MAX_FILES_PER_JOB
+        chunk = entries[start:end]
+        submit_job(i, chunk)
+
+    print("\n✅ All preprocessing jobs submitted.")
 
 
 # -----------------------------------------------------------------------------
@@ -127,7 +150,7 @@ def submit_job(job_idx, chunk):
 
     submit_content = f"""\
 executable = {WRAPPER_SCRIPT}
-arguments  = {manifest_path}
+arguments  = {manifest_path} {PROJECT_DIR}
 initialdir = {LOG_DIR}
 
 output = {log_out}
@@ -153,14 +176,5 @@ queue
     subprocess.run(["condor_submit", str(sub_path)], check=False)
     print(f"🚀 Submitted job {job_idx:04d} ({len(chunk)} files)")
 
-
-# -----------------------------------------------------------------------------
-# SUBMIT ALL JOBS
-# -----------------------------------------------------------------------------
-for i in range(n_jobs):
-    start = i * MAX_FILES_PER_JOB
-    end = start + MAX_FILES_PER_JOB
-    chunk = entries[start:end]
-    submit_job(i, chunk)
-
-print("\n✅ All preprocessing jobs submitted.")
+if __name__ == "__main__":
+    main()

@@ -8,75 +8,100 @@ Reads Hydra configs, builds a global split manifest, splits it into chunks of �
 and directly submits each chunk to Condor to run `vectorize_to_local` inside the Apptainer container.
 """
 
+import rootutils
+rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 import os
 import json
 import subprocess
+import hydra
 from math import ceil
 from pathlib import Path
-from omegaconf import OmegaConf
+from omegaconf import DictConfig
 
 from src.data.utils import load_global_filelist, make_split_manifest
 
 # -----------------------------------------------------------------------------
 # CONFIG
 # -----------------------------------------------------------------------------
-MAX_FILES_PER_JOB = 20
+MAX_FILES_PER_JOB = 50
 JOB_FLAVOUR = "tomorrow"  # ≈ 1 day runtime per job
 
-PROJECT_DIR = Path("/afs/cern.ch/work/p/phploner/foundation_model_testing")
+PROJECT_DIR = Path(__file__).resolve().parents[1]
 WRAPPER_SCRIPT = PROJECT_DIR / "src/data/wrapper_vectorize.sh"
 LOG_DIR = PROJECT_DIR / "logs/condor_logs/vectorization"
 
 # -----------------------------------------------------------------------------
-# LOAD CONFIGS
+# MAIN
 # -----------------------------------------------------------------------------
-print("🟢 Loading Hydra configs...")
-
-train_cfg = OmegaConf.load(PROJECT_DIR / "configs/train.yaml")
-
-data_cfg = train_cfg.data
-paths_cfg = train_cfg.paths
-
-LABEL = data_cfg.label
-TMP_VEC_DIR = Path(paths_cfg.tmp_vec_dir)
-EOS_VEC_DIR = Path(paths_cfg.eos_vec_dir)
-DATASET_DIR = Path(paths_cfg.dataset_dir)
-
-split_counts = data_cfg.train_val_test_split_per_class
-include_folders = [data_cfg.process_to_folder[c] for c in data_cfg.to_classify.values()]
-
-LOG_DIR.mkdir(parents=True, exist_ok=True)
-
-# -----------------------------------------------------------------------------
-# BUILD GLOBAL MANIFEST
-# -----------------------------------------------------------------------------
-print("\n🟢 Building global manifest...")
-global_filelist = load_global_filelist()
-
-manifest = make_split_manifest(
-    global_filelist=global_filelist,
-    split_counts=split_counts,
-    include_folders=include_folders,
-    seed=42,
+@hydra.main(
+    config_path="../configs",
+    config_name="vectorize_preprocess.yaml",
+    version_base="1.3",
 )
+def main(cfg: DictConfig):
 
-manifest_path = EOS_VEC_DIR / "split_manifest_global.json"
-os.makedirs(EOS_VEC_DIR, exist_ok=True)
-with open(manifest_path, "w") as f:
-    json.dump(manifest, f, indent=2)
-print(f"✅ Wrote global manifest → {manifest_path}")
+    print("🟢 Hydra config composed successfully")
+    # -----------------------------------------------------------------------------
+    # LOAD CONFIGS
+    # -----------------------------------------------------------------------------
+    print("🟢 Loading Hydra configs...")
 
-# -----------------------------------------------------------------------------
-# FLATTEN MANIFEST INTO ENTRIES
-# -----------------------------------------------------------------------------
-entries = []
-for folder, splits in manifest.items():
-    for split_name, files in splits.items():
-        for fname in files:
-            entries.append((folder, split_name, fname))
+    data_cfg = cfg.data
+    paths_cfg = cfg.paths
 
-n_jobs = ceil(len(entries) / MAX_FILES_PER_JOB)
-print(f"\n🟡 Total files: {len(entries)} → {n_jobs} jobs (≤{MAX_FILES_PER_JOB} files/job)")
+    LABEL = data_cfg.label
+    TMP_VEC_DIR = Path(paths_cfg.tmp_data_dir) / LABEL / "vectorized"
+    EOS_VEC_DIR = Path(paths_cfg.eos_data_dir) / LABEL / "vectorized"
+    DATASET_DIR = Path(paths_cfg.dataset_dir)
+
+    split_counts = data_cfg.train_val_test_split_per_class
+    include_folders = [data_cfg.process_to_folder[c] for c in data_cfg.to_classify]
+
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+    # -----------------------------------------------------------------------------
+    # BUILD GLOBAL MANIFEST
+    # -----------------------------------------------------------------------------
+    print("\n🟢 Building global manifest...")
+    global_filelist = load_global_filelist()
+
+    manifest = make_split_manifest(
+        global_filelist=global_filelist,
+        split_counts=split_counts,
+        include_folders=include_folders,
+        seed=42,
+    )
+
+    manifest_path = EOS_VEC_DIR / "split_manifest_global.json"
+    os.makedirs(EOS_VEC_DIR, exist_ok=True)
+    with open(manifest_path, "w") as f:
+        json.dump(manifest, f, indent=2)
+    print(f"✅ Wrote global manifest → {manifest_path}")
+
+    # -----------------------------------------------------------------------------
+    # FLATTEN MANIFEST INTO ENTRIES
+    # -----------------------------------------------------------------------------
+    entries = []
+    for folder, splits in manifest.items():
+        for split_name, files in splits.items():
+            for fname in files:
+                target_path = EOS_VEC_DIR / split_name / folder / fname.replace(".parquet", "_x.npy")
+                if not target_path.exists():
+                    entries.append((folder, split_name, fname))
+
+    n_jobs = ceil(len(entries) / MAX_FILES_PER_JOB)
+    print(f"\n🟡 Total files: {len(entries)} → {n_jobs} jobs (≤{MAX_FILES_PER_JOB} files/job)")
+
+    # -----------------------------------------------------------------------------
+    # SUBMIT ALL JOBS
+    # -----------------------------------------------------------------------------
+    for i in range(n_jobs):
+        start = i * MAX_FILES_PER_JOB
+        end = start + MAX_FILES_PER_JOB
+        chunk = entries[start:end]
+        submit_job(i, chunk)
+
+    print(f"\n✅ All {n_jobs} jobs submitted to Condor.")
 
 # -----------------------------------------------------------------------------
 # FUNCTION TO SUBMIT A SINGLE JOB
@@ -100,7 +125,7 @@ def submit_job(job_idx, chunk):
     # Run the wrapper with the manifest path as argument
     submit_content = f"""\
 executable = {WRAPPER_SCRIPT}
-arguments  = {manifest_path}
+arguments  = {manifest_path} {PROJECT_DIR}
 initialdir = {LOG_DIR}
 
 output = {log_out}
@@ -126,14 +151,5 @@ queue
     subprocess.run(["condor_submit", str(sub_path)], check=False)
     print(f"🚀 Submitted job {job_idx:04d} ({len(chunk)} files)")
 
-
-# -----------------------------------------------------------------------------
-# SUBMIT ALL JOBS
-# -----------------------------------------------------------------------------
-for i in range(n_jobs):
-    start = i * MAX_FILES_PER_JOB
-    end = start + MAX_FILES_PER_JOB
-    chunk = entries[start:end]
-    submit_job(i, chunk)
-
-print(f"\n✅ All {n_jobs} jobs submitted to Condor.")
+if __name__ == "__main__":
+    main()
