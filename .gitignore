@@ -163,3 +163,6 @@ src/utils/dataset_tests/scan_for_negative_jet_masses.ipynb
 notebooks/test_notebook.ipynb
 src/callbacks/example.py
 notebooks/dataset_inspection.ipynb
+configs/data/collide2v_basic.yaml
+test_optuna.db
+src/utils/PID_scan/unique_pids_old.json
