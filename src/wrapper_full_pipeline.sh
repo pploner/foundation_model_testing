@@ -13,6 +13,8 @@ echo "Working directory: $(pwd)"
 PROJECT_DIR=/afs/cern.ch/work/p/phploner/foundation_model_testing
 IMAGE=${PROJECT_DIR}/fm_testing.sif
 
+SEED="${HYDRA_SEED:-24}"
+
 # --- Go to project directory ---
 cd ${PROJECT_DIR}
 
@@ -31,7 +33,7 @@ EOF
 )
 
 # Pick Apptainer flags
-APPTAINER_FLAGS="--cleanenv --bind /afs:/afs --bind /eos:/eos --writable-tmpfs"
+APPTAINER_FLAGS="--bind /afs:/afs --bind /eos:/eos --writable-tmpfs --env CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES --env NVIDIA_VISIBLE_DEVICES=all"
 
 if [ "$ACCELERATOR" = "gpu" ]; then
     echo "[wrapper] GPU requested → enabling --nv"
@@ -43,8 +45,9 @@ fi
 # --- Run training inside container ---
 echo "[wrapper] Running training with flags: $APPTAINER_FLAGS"
 
-apptainer exec $APPTAINER_FLAGS \
-    "${IMAGE}" bash -lc "python src/train.py"
+apptainer exec $APPTAINER_FLAGS "${IMAGE}" bash -lc "
+  python src/train.py -m hparams_search=collide2v_optuna_multiclass hydra.sweeper.sampler.seed=${SEED} data.num_workers=6
+"
 
 EXIT_CODE=$?
 

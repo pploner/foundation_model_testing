@@ -5,6 +5,9 @@
 executable = src/wrapper_full_pipeline.sh
 arguments  = $(ClusterId)
 
+# Choose sweep seed (change once per submission for optuna sweeps)
+SEED = 41
+
 # --- Logs ---
 output = /afs/cern.ch/work/p/phploner/foundation_model_testing/logs/condor_logs/job_$(ClusterId).out
 error  = /afs/cern.ch/work/p/phploner/foundation_model_testing/logs/condor_logs/job_$(ClusterId).err
@@ -18,8 +21,12 @@ run_as_owner = True
 
 # --- Environment ---
 getenv = True
-request_cpus = 4
+request_cpus = 6
 request_gpus = 1
-environment = "OMP_NUM_THREADS=4 MKL_NUM_THREADS=4"
+
+# Require at least 20 GB GPU memory (filters out MIG 1g.12gb, keeps V100 32GB etc.)
+Requirements = (TARGET.GPUs_GlobalMemoryMb >= 32000)
+
+environment = "OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 HYDRA_SEED=$(SEED)"
 
 queue
