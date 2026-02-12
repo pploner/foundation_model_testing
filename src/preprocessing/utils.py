@@ -9,8 +9,8 @@ from collections import OrderedDict
 ##########################################
 
 PID_CATEGORIES = [
-    -106, -92, -65, -45, -40, -16, -13, -11, -8, -6,
-     0, 6, 11, 13, 16, 22, 40, 45, 65, 92, 106
+      -3334, -3312, -3222, -3112, -2212, -321, -211, -13, -11, 0,
+      11, 13, 22, 211, 321, 2212, 3112, 3222, 3312, 3334, 5222
 ]
 BTAG_CATEGORIES = [0, 1]
 CHARGE_CATEGORIES = [-1, 0, 1]
@@ -41,10 +41,13 @@ PATTERN_TO_GROUP = [
     (r'_MET_Phi$', 'phi'),
     (r'_PrimaryVertex_SumPT2$', 'vertexpt2'),
     (r'_PrimaryVertex_[XYZT]$', 'vertexcoord'),
+    (r'_IsolationVar$', 'isolation'),
     (r'_IsolationVarRhoCorr$', 'isolation'),
     (r'_EhadOverEem$', 'EhadOverEem'),
     (r'_D0$', 'displacement'),
     (r'_DZ$', 'displacement'),
+    (r'_NCharged$', 'ncharged'),
+    (r'_NNeutrals$', 'nneutrals'),
 ]
 
 def infer_group(feature_name: str) -> str:
