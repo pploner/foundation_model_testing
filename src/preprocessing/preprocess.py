@@ -47,7 +47,7 @@ class PreprocessingPipeline:
                 - eos_preproc_dir
             preprocess_cfg: expects keys:
                 - enabled (bool)
-                - mode: "fit_and_apply" or "apply_only"
+                - mode: "fit_only", "fit_and_apply" or "apply_only"
                 - fit_num_files_per_class: int
                 - feature_transforms: {group: transform_name}
                 - feature_normalizations: {group: norm_name}
@@ -90,22 +90,26 @@ class PreprocessingPipeline:
             return
 
         mode = self.cfg.get("mode", "fit_and_apply")
-        if mode not in ("fit_and_apply", "apply_only"):
-            raise ValueError("preprocess.mode must be 'fit_and_apply' or 'apply_only'.")
+        if mode not in ("fit_only", "fit_and_apply", "apply_only"):
+            raise ValueError("preprocess.mode must be 'fit_only', 'fit_and_apply' or 'apply_only'.")
 
         if os.path.exists(self.stats_out):
             print(f"🟢 Preprocessed data already found with {self.stats_out} — skipping full preprocessing.")
             return
 
-        # Fit stats if requested
-        if mode == "fit_and_apply":
+        # Fit stats if requested, else load existing stats
+        if mode == "fit_only" or mode == "fit_and_apply":
             stats = self.fit_normalization()
             self._save_stats_json(stats)
-        else:
+        elif mode == "apply_only":
             stats = self._load_stats_json()
 
         # Apply to all splits/classes/files
-        self.apply_to_all_files(stats)
+        if mode == "apply_only" or mode == "fit_and_apply":
+            print("🟡 Applying transforms + normalization to all files...")
+            self.apply_to_all_files(stats)
+        elif mode == "fit_only":
+            print("✅ preprocess.py completed fit_only.")
 
         # Save expanded feature_map to EOS (after success)
         save_feature_map(self.expanded_fm, self.fm_out)
@@ -193,6 +197,51 @@ class PreprocessingPipeline:
         # Ensure stats present at EOS root
         if not os.path.exists(self.stats_out):
             self._save_stats_json(stats)
+
+    def apply_manifest(self, subset_manifest: Dict, stats: Dict):
+        """
+        Apply preprocessing only to files listed in subset_manifest.
+        Manifest format:
+        {
+            "QCD_HT50toInf": {
+                "train": [
+                "QCD_HT50toInf-NEVENT10000-RS26001180_x.npy",
+                "QCD_HT50toInf-NEVENT10000-RS26001181_x.npy",
+                "QCD_HT50toInf-NEVENT10000-RS26001183_x.npy",
+                ...
+        """
+        for cls_folder in subset_manifest:
+            for split in subset_manifest[cls_folder]:
+                in_dir = os.path.join(self.paths["eos_vec_dir"], split, cls_folder)
+                scratch = os.environ.get("TMPDIR", "/tmp")
+                out_tmp_dir = os.path.join(scratch, split, cls_folder)
+                out_eos_dir = os.path.join(self.paths["eos_preproc_dir"], split, cls_folder)
+                os.makedirs(out_tmp_dir, exist_ok=True)
+                os.makedirs(out_eos_dir, exist_ok=True)
+
+                files = subset_manifest[cls_folder][split]
+                print(f"🟡 Processing {split}/{cls_folder} ({len(files)} files from manifest)")
+                for fname in files:
+                    fpath = os.path.join(in_dir, fname)
+                    tmp_out = os.path.join(out_tmp_dir, fname)
+                    final_out = os.path.join(out_eos_dir, fname)
+
+                    # Skip if already present at EOS
+                    if os.path.exists(final_out):
+                        continue
+
+                    X = self._load_raw_npy(fpath)
+                    X_t = self._transform_only(X)
+                    X_n = self._apply_normalization(X_t, stats)
+
+                    np.save(tmp_out, X_n.cpu().numpy())
+                    shutil.move(tmp_out, final_out)
+
+                    label_in = fpath.replace("_x.npy", "_y.npy")
+                    if os.path.exists(label_in):
+                        label_final_out = final_out.replace("_x.npy", "_y.npy")
+                        shutil.copy(label_in, label_final_out)
+
 
     # ---------- helpers: IO & safety ----------
 
@@ -390,9 +439,9 @@ class PreprocessingPipeline:
         with open(self.stats_out, "r") as f:
             stats = json.load(f)
         # sanity check
-        array_stats = stats.get("array_stats", {})
-        fo = array_stats.get("feature_order", [])
-        if len(fo) != self.output_dim:
+        stats_meta = stats.get("_meta", {})
+        n_features_exp = stats_meta.get("num_features_expanded", 0)
+        if n_features_exp != self.output_dim:
             raise RuntimeError(
                 "Normalization stats feature count/order does not match expanded feature map."
             )

@@ -6,8 +6,8 @@
 set -euo pipefail
 
 MANIFEST_PATH="$1"
+PROJECT_DIR="$2"
 
-PROJECT_DIR=/afs/cern.ch/work/p/phploner/foundation_model_testing
 IMAGE=${PROJECT_DIR}/fm_testing.sif
 
 echo "[`date`] Starting preprocessing job on $(hostname)"

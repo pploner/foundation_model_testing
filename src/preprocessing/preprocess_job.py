@@ -32,7 +32,7 @@ args.manifest_path = os.path.abspath(args.manifest_path)
 sys.argv = [sys.argv[0]]
 
 
-@hydra.main(version_base="1.3", config_path="../../configs", config_name="train.yaml")
+@hydra.main(version_base="1.3", config_path="../../configs", config_name="vectorize_preprocess.yaml")
 def main(cfg: DictConfig):
     # Load the subset manifest for this job
     with open(args.manifest_path, "r") as f:
@@ -50,19 +50,15 @@ def main(cfg: DictConfig):
 
     # Build class -> folder mapping
     to_classify = data_cfg.to_classify               # {"QCD": "QCD inclusive", ...}
-    proc_to_folder = data_cfg.process_to_folder      # {"QCD inclusive": "QCD_HT50toInf", ...}
-    class_order = list(to_classify.keys())
-    process_to_folder = {
-        class_name: proc_to_folder[proc_name]
-        for class_name, proc_name in to_classify.items()
-    }
+    process_to_folder = data_cfg.process_to_folder      # {"QCD inclusive": "QCD_HT50toInf", ...}
+
 
     # Instantiate preprocessing pipeline
     pipeline = PreprocessingPipeline(
         paths=paths,
         preprocess_cfg=preprocess_cfg,
         process_to_folder=process_to_folder,
-        class_order=class_order,
+        class_order=to_classify,
         device="cpu",
     )
 

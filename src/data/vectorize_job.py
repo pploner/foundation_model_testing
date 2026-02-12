@@ -29,33 +29,28 @@ args.manifest_path = os.path.abspath(args.manifest_path)
 # Prevent Hydra from seeing the CLI arguments
 sys.argv = [sys.argv[0]]
 
-@hydra.main(version_base="1.3", config_path="../../configs", config_name="train.yaml")
+@hydra.main(version_base="1.3", config_path="../../configs", config_name="vectorize_preprocess.yaml")
 def main(cfg: DictConfig):
     with open(args.manifest_path, "r") as f:
         split_manifest = json.load(f)
 
     data_cfg = cfg.data
     to_classify = data_cfg.to_classify
-    process_to_folder = data_cfg.process_to_folder
-
-    # remap class name -> folder name
-    folder_map = {
-        class_name: process_to_folder[process_name]
-        for class_name, process_name in to_classify.items()
-    }
+    folder_map = data_cfg.process_to_folder
 
     vectorize_to_local(
         base_dir=data_cfg.paths.dataset_dir,
         config=data_cfg.datasets_config,
-        class_names=list(data_cfg.to_classify.keys()),
+        class_names=to_classify,
         folder_map=folder_map,
-        labels_map={k: i for i, k in enumerate(data_cfg.to_classify.keys())},
+        labels_map={k: i for i, k in enumerate(to_classify)},
         all_cols=get_all_cols(data_cfg.datasets_config),
         vlen=getattr(data_cfg, "vlen", 0),
         tmp_vec_dir=data_cfg.paths.tmp_vec_dir,
         eos_vec_dir=data_cfg.paths.eos_vec_dir,
         split_counts=data_cfg.train_val_test_split_per_class,
         split_manifest=split_manifest,
+        parallel_processing=True,
     )
 
 if __name__ == "__main__":
