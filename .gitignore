@@ -166,3 +166,15 @@ notebooks/dataset_inspection.ipynb
 configs/data/collide2v_basic.yaml
 test_optuna.db
 src/utils/PID_scan/unique_pids_old.json
+optuna_analysis.db
+notebooks/analysis_tamara.ipynb
+notebooks/l1t_proposition.ipynb
+notebooks/model_visualization_logits.ipynb
+notebooks/model_visualization_probs.ipynb
+notebooks/thesis_plots.ipynb
+notebooks/top_models/top1_preds.npz
+notebooks/top_models/top1_roc.png
+notebooks/top_models/top1.ckpt
+notebooks/top_models/top2_preds.npz
+notebooks/top_models/top2_roc.png
+notebooks/top_models/top2.ckpt
