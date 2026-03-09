@@ -2,9 +2,24 @@ from typing import Any, Dict, List, Tuple
 
 import hydra
 import rootutils
+import functools
+import torch
+import omegaconf
+import collections
+import typing
 from lightning import LightningDataModule, LightningModule, Trainer
 from lightning.pytorch.loggers import Logger
-from omegaconf import DictConfig
+
+from pathlib import Path
+from omegaconf import OmegaConf, DictConfig
+
+# Allow safe unpickling of functools.partial from trusted checkpoints (else newer Pytorch versions fail to load them)
+torch.serialization.add_safe_globals([functools.partial,
+                                      torch.optim.AdamW,torch.optim.lr_scheduler.CosineAnnealingLR, torch.optim.lr_scheduler.ReduceLROnPlateau,
+                                      omegaconf.ListConfig, omegaconf.DictConfig, omegaconf.dictconfig.DictConfig,
+                                      omegaconf.nodes.AnyNode, omegaconf.base.Metadata, omegaconf.base.ContainerMetadata,
+                                      collections.defaultdict, typing.Any,
+                                      list, dict, int])
 
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 # ------------------------------------------------------------------------------------ #
@@ -27,6 +42,7 @@ rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 from src.utils import (
     RankedLogger,
     extras,
+    instantiate_callbacks,
     instantiate_loggers,
     log_hyperparameters,
     task_wrapper,
@@ -34,6 +50,14 @@ from src.utils import (
 
 log = RankedLogger(__name__, rank_zero_only=True)
 
+def _find_hydra_config_for_ckpt(ckpt_path: str) -> Path | None:
+    """Walk upwards from ckpt_path looking for <trial>/.hydra/config.yaml."""
+    p = Path(ckpt_path).expanduser().resolve()
+    for parent in [p.parent, *p.parents]:
+        candidate = parent / ".hydra" / "config.yaml"
+        if candidate.exists():
+            return candidate
+    return None
 
 @task_wrapper
 def evaluate(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
@@ -53,16 +77,20 @@ def evaluate(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     log.info(f"Instantiating model <{cfg.model._target_}>")
     model: LightningModule = hydra.utils.instantiate(cfg.model)
 
+    log.info("Instantiating callbacks...")
+    callbacks = instantiate_callbacks(cfg.get("callbacks"))
+
     log.info("Instantiating loggers...")
     logger: List[Logger] = instantiate_loggers(cfg.get("logger"))
 
     log.info(f"Instantiating trainer <{cfg.trainer._target_}>")
-    trainer: Trainer = hydra.utils.instantiate(cfg.trainer, logger=logger)
+    trainer: Trainer = hydra.utils.instantiate(cfg.trainer, callbacks=callbacks, logger=logger)
 
     object_dict = {
         "cfg": cfg,
         "datamodule": datamodule,
         "model": model,
+        "callbacks": callbacks,
         "logger": logger,
         "trainer": trainer,
     }
@@ -91,7 +119,32 @@ def main(cfg: DictConfig) -> None:
     # apply extra utilities
     # (e.g. ask for tags if none are provided in cfg, print cfg tree, etc.)
     extras(cfg)
+    if cfg.get("use_trial_config", True):
+        # keep ONLY these from eval.yaml
+        eval_ckpt_path = cfg.ckpt_path
+        eval_task_name = cfg.get("task_name", "eval")
+        eval_mlflow_experiment_name = OmegaConf.select(cfg, "logger.mlflow.experiment_name")
+        eval_mlflow_run_name = OmegaConf.select(cfg, "logger.mlflow.run_name")
 
+        hydra_cfg_path = _find_hydra_config_for_ckpt(eval_ckpt_path)
+        if hydra_cfg_path is None:
+            raise FileNotFoundError(
+                f"Could not find .hydra/config.yaml for ckpt_path={eval_ckpt_path}. "
+                "Expected <trial>/.hydra/config.yaml in parent dirs."
+            )
+
+        train_cfg = OmegaConf.load(hydra_cfg_path)
+
+        # make train_cfg editable
+        OmegaConf.set_struct(train_cfg, False)
+
+        # base config is the training run (so model/data params match checkpoint)
+        cfg = train_cfg
+        # but overwrite these with eval.yaml (e.g. logger for evaluation results, task_name for MLflow tags, etc.)
+        OmegaConf.update(cfg, "ckpt_path", eval_ckpt_path, merge=False)
+        OmegaConf.update(cfg, "task_name", eval_task_name, merge=False)
+        OmegaConf.update(cfg, "logger.mlflow.experiment_name", eval_mlflow_experiment_name, merge=False)
+        OmegaConf.update(cfg, "logger.mlflow.run_name", eval_mlflow_run_name, merge=False)
     evaluate(cfg)
 
 

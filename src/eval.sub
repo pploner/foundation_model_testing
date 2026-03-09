@@ -1,0 +1,26 @@
+# ================================
+# Condor submission: full pipeline (Apptainer)
+# ================================
+
+executable = src/wrapper_eval.sh
+arguments  = $(ClusterId)
+
+# --- Logs ---
+output = /afs/cern.ch/work/p/phploner/foundation_model_testing/logs/condor_logs/job_$(ClusterId).out
+error  = /afs/cern.ch/work/p/phploner/foundation_model_testing/logs/condor_logs/job_$(ClusterId).err
+log    = /afs/cern.ch/work/p/phploner/foundation_model_testing/logs/condor_logs/job_$(ClusterId).log
+
+# --- Run job as your CERN user (needed for EOS writes) ---
+run_as_owner = True
+
+# --- Batch flavour ---
++JobFlavour = "longlunch"
+
+# --- Environment ---
+getenv = True
+request_cpus = 6
+request_gpus = 1
+
+environment = "OMP_NUM_THREADS=4 MKL_NUM_THREADS=4"
+
+queue
