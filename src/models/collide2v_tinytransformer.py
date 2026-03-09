@@ -111,7 +111,7 @@ class COLLIDE2VTransformerLitModule(LightningModule):
 
         :param batch: A batch of data (x, y).
 
-        :return: (loss, probs, preds, targets)
+        :return: (loss, logits, probs, preds, targets)
         """
         x, y = batch
         logits = self.forward(x)
@@ -120,7 +120,7 @@ class COLLIDE2VTransformerLitModule(LightningModule):
         probs = F.softmax(logits, dim=-1)
         preds = probs.argmax(dim=-1)
 
-        return loss, probs, preds, y
+        return loss, logits, probs, preds, y
 
     def training_step(
         self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int
@@ -132,7 +132,7 @@ class COLLIDE2VTransformerLitModule(LightningModule):
         :param batch_idx: The index of the current batch.
         :return: A tensor of losses between model predictions and targets.
         """
-        loss, probs, preds, targets = self.model_step(batch)
+        loss, logits, probs, preds, targets = self.model_step(batch)
 
         # update and log metrics
         self.train_loss(loss)
@@ -154,7 +154,7 @@ class COLLIDE2VTransformerLitModule(LightningModule):
             labels.
         :param batch_idx: The index of the current batch.
         """
-        loss, probs, preds, targets = self.model_step(batch)
+        loss, logits, probs, preds, targets = self.model_step(batch)
 
         # update and log metrics
         self.val_loss(loss)
@@ -222,7 +222,7 @@ class COLLIDE2VTransformerLitModule(LightningModule):
             labels.
         :param batch_idx: The index of the current batch.
         """
-        loss, probs, preds, targets = self.model_step(batch)
+        loss, logits, probs, preds, targets = self.model_step(batch)
 
         # update and log metrics
         self.test_loss(loss)
@@ -230,7 +230,7 @@ class COLLIDE2VTransformerLitModule(LightningModule):
         self.log("test/loss", self.test_loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log("test/acc", self.test_acc, on_step=False, on_epoch=True, prog_bar=True)
 
-        return {"probs": probs}
+        return {"probs": probs, "logits": logits}
 
     def on_test_epoch_end(self) -> None:
         """Lightning hook that is called when a test epoch ends."""
@@ -295,7 +295,7 @@ class COLLIDE2VTransformerLitModule(LightningModule):
                 "optimizer": optimizer,
                 "lr_scheduler": {
                     "scheduler": scheduler,
-                    "monitor": "val/loss",
+                    "monitor": "val/auroc",
                     "interval": "epoch",
                     "frequency": 1,
                 },

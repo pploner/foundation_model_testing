@@ -5,6 +5,7 @@ defaults:
   - rich_progress_bar
   - lr_monitor
   - multiclassROC
+  - savelogits
   - _self_
 
 model_checkpoint:
