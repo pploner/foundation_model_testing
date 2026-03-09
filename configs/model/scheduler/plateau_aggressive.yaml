@@ -1,0 +1,7 @@
+# @package model.scheduler
+_target_: torch.optim.lr_scheduler.ReduceLROnPlateau
+_partial_: true
+mode: max
+factor: 0.2
+patience: 2
+threshold: 1e-4

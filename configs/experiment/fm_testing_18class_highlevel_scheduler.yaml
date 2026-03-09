@@ -97,7 +97,7 @@ trainer:
   min_epochs: 1
   max_epochs: 50
   gradient_clip_algorithm: norm
-  gradient_clip_val: 1.0
+  gradient_clip_val: 0.0
   accumulate_grad_batches: 8
 
 
@@ -120,5 +120,5 @@ preprocess:
 
 logger:
   mlflow:
-    run_name: "18_class_classification_sweep"
-    experiment_name: "multi_class_classification"
+    run_name: "18_class_scheduler_sweep"
+    experiment_name: "multi_class_classification_scheduler"
