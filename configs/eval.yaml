@@ -1,7 +1,6 @@
 # @package _global_
 
 defaults:
-  - _self_
   - data: collide2v_basic # choose datamodule with `test_dataloader()` for evaluation
   - preprocess: collide2v
   - model: tinyTransformer
@@ -12,12 +11,22 @@ defaults:
   - extras: default
   - hydra: default
 
-  # choose experiment config with matching data and preprocessing settings to trained model
+  # choose experiment config with matching data and preprocessing settings to trained model, set use_trial_config: true to overwrite with
+  # the saved config.yaml Hydra config from the exact training run that produced the checkpoint given below
   - experiment: fm_testing_18class_highlevel
 
+  - _self_
+
 task_name: "eval"
+
+# choose a run name and experiment name for logging evaluation results to MLflow
+logger:
+  mlflow:
+    run_name: "best_run_evaluation"
+    experiment_name: "debug"
 
 tags: ["dev"]
 
 # passing checkpoint path is necessary for evaluation
-ckpt_path: /afs/cern.ch/work/p/phploner/foundation_model_testing/logs/train/runs/2025-12-03_12-03-45/checkpoints/last.ckpt
+ckpt_path: /afs/cern.ch/work/p/phploner/foundation_model_testing/logs/train/multiruns/2026-01-31_16-02-51/10/checkpoints/epoch_047.ckpt
+use_trial_config: true

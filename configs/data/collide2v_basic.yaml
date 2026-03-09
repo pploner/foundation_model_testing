@@ -1,7 +1,7 @@
 _target_: src.data.collide2v_datamodule.COLLIDE2VDataModule
-batch_size: 1024 # Needs to be divisible by the number of devices (e.g., if in a distributed setup)
+batch_size: 2048 # Needs to be divisible by the number of devices (e.g., if in a distributed setup)
 train_val_test_split_per_class: [9_960_000, 20_000, 20_000]
-num_workers: 4
+num_workers: 6
 pin_memory: true
 
 preprocess: ${preprocess}
