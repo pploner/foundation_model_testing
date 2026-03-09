@@ -46,7 +46,7 @@ fi
 echo "[wrapper] Running training with flags: $APPTAINER_FLAGS"
 
 apptainer exec $APPTAINER_FLAGS "${IMAGE}" bash -lc "
-  python src/train.py -m hparams_search=collide2v_optuna_multiclass hydra.sweeper.sampler.seed=${SEED} data.num_workers=6
+  python src/train.py -m hparams_search=collide2v_optuna_multiclass_scheduler hydra.sweeper.sampler.seed=${SEED}
 "
 
 EXIT_CODE=$?
