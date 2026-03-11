@@ -25,7 +25,7 @@ ipykernel
 plotly
 nbformat
 sqlalchemy<2.0  # avoid v2 due to incompatibility with optuna
-optuna-dashboard==0.14.0
+optuna-dashboard==0.20.0
 
 # --------- others --------- #
 rootutils       # standardizing the project root setup
